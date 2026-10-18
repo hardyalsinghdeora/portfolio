@@ -33,6 +33,24 @@ const SYNONYMS = {
   langchain: ["langchain", "langgraph"],
   vector: ["vector", "pgvector", "embeddings"],
   pinecone: ["vector", "pgvector"],
+  genai: ["ai", "llm", "agent", "agentic"],
+  generative: ["ai", "llm", "agent", "agentic"],
+  hallucination: ["hallucination", "grounding", "retrieved", "sources"],
+  hallucinate: ["hallucination", "grounding", "retrieved", "sources"],
+  grounded: ["grounding", "retrieved", "sources"],
+  token: ["token", "cost", "budget"],
+  cost: ["cost", "token", "budget"],
+  claude: ["claude", "anthropic"],
+  anthropic: ["claude", "anthropic"],
+  openai: ["openai", "realtime"],
+  ollama: ["ollama", "local"],
+  prompt: ["prompt", "prompting", "context"],
+  structured: ["structured", "schema", "json"],
+  image: ["image", "generation", "nano", "banana"],
+  backfill: ["backfill", "backfilled"],
+  safe: ["safe", "safety", "guardrail"],
+  guardrail: ["guardrail", "safety", "least", "privilege"],
+  guardrails: ["guardrail", "safety", "least", "privilege"],
   bedrock: ["bedrock", "vertex"],
   vertex: ["bedrock", "vertex"],
   eval: ["evaluation", "eval", "ragas"],
@@ -139,6 +157,21 @@ export function buildChunks(p) {
     add("agentic-agents", "Agentic AI: agents in production", "agentic_ai", list(ag.agents_in_production));
     add("agentic-guardrails", "Agentic AI: guardrails, cost control and real-time AI", "agentic_ai",
       `${list(ag.guardrails_and_cost)}\nReal-time AI (contributed): ${ag.real_time_ai_contributed}`);
+    // Split in two so each passage stays small enough for a top-5 retrieval budget.
+    const pr = ag.llm_engineering_practices || [];
+    const half = Math.ceil(pr.length / 2);
+    if (pr.length) {
+      add("agentic-practices-output", "Agentic AI: LLM engineering practices (structured output, providers, context budgeting)", "agentic_ai", list(pr.slice(0, half)));
+      add("agentic-practices-safety", "Agentic AI: LLM engineering practices (grounding, bounded loops, fallbacks, secrets, token cost)", "agentic_ai", list(pr.slice(half)));
+    }
+    const rd = ag.rag_design;
+    if (rd) {
+      add("agentic-rag", "Agentic AI: how the RAG behind this page is designed and evaluated", "agentic_ai",
+        Object.entries(rd).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n"));
+    }
+  }
+  for (const [k, v] of Object.entries(p.genai_quick_answers || {})) {
+    add("genai-" + k, "Gen AI quick answer: " + k.replace(/_/g, " "), "genai_quick_answers", v);
   }
 
   add("current-focus", "What I'm working on in 2026", "current_focus_2026", list(p.current_focus_2026));

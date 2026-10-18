@@ -97,6 +97,24 @@ const PHONE = /(?:\+91[-\s]?)?\b[6-9]\d{9}\b/;
 await test("no phone number anywhere in the public knowledge base", () => {
   assert(!PHONE.test(JSON.stringify(PROFILE)), "phone-like number found");
 });
+// Employer-internal vocabulary and company numbers that may be said in an interview but never
+// published (career-profile redlines.json and the verbal-only rows of the master résumé).
+const REDLINES = /\b(Mindspark|Naandi|Shiksha|SchoolSite|School Site|Navigator|da_orderMaster|common_user_details|educatio_educat|ei-order|navigator-aggregator|ei-navigator-ui|ei-mcp-gateway|Zoho)\b|\b(ASSET|CARES|SZM|NSH)\b|\bNAV-\d|500k|500,000|577|1,689,499|363,609|₹\s?\d|\bcr(ore)?\b/;
+await test("no redlined names or verbal-only numbers in the knowledge base or public pages", async () => {
+  const pages = await Promise.all(["../public/index.html", "../public/resume-agentic-ai.html"].map((u) => fetch(u).then((r) => r.text())));
+  for (const [name, text] of [["profile", JSON.stringify(PROFILE)], ["index.html", pages[0]], ["resume-agentic-ai.html", pages[1]]]) {
+    const m = text.match(REDLINES);
+    assert(!m, `redline "${m && m[0]}" in ${name}`);
+  }
+});
+await test("Gen AI sections are indexed and every get_section value resolves", async () => {
+  for (const id of ["agentic-practices-output", "agentic-practices-safety", "agentic-rag", "genai-rag_experience", "genai-hallucination_control"]) {
+    assert(chunks.some((c) => c.id === id), id + " missing");
+  }
+  const { TOOLS } = await import("../src/agent.js");
+  const sections = TOOLS[0].functionDeclarations.find((f) => f.name === "get_section").parameters.properties.section.enum;
+  for (const s of sections) assert(chunks.some((c) => c.section === s), "get_section(" + s + ") would be empty");
+});
 await test("BM25 ranks the notice-period chunk first", () => {
   const top = bm25(index, "what is your notice period")[0];
   assert(["availability", "qa-notice_period"].includes(chunks[top.i].id), chunks[top.i].id);

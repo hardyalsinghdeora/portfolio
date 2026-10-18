@@ -1,4 +1,5 @@
-# Deploys dist/ to the existing Cloudflare Pages project on every push to main.
+# Tests, then deploys dist/ to the existing Cloudflare Pages project on every push to main.
+# Pull requests run the tests only.
 # One-time setup (repo > Settings > Secrets and variables > Actions):
 #   CLOUDFLARE_API_TOKEN   token with the "Cloudflare Pages: Edit" permission
 #   CLOUDFLARE_ACCOUNT_ID  shown on the Workers & Pages overview page
@@ -8,6 +9,7 @@ name: Deploy to Cloudflare Pages
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -15,17 +17,42 @@ permissions:
   deployments: write
 
 concurrency:
-  group: pages-deploy
+  group: pages-deploy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Deploy only runs if this passes: unit + agent tests, the retrieval eval, the redline check
+  # and a smoke test of the bundled worker.
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the bundle is present
-        run: test -f dist/_worker.js && test -f dist/index.html
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Build and test
+        run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Rebuild so what ships is exactly what the test job built, whichever machine committed dist/.
+      - name: Build
+        run: node scripts/build.mjs && test -f dist/_worker.js && test -f dist/index.html
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3

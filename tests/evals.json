@@ -34,5 +34,18 @@
   { "q": "What migrations have you led?", "expect": ["qa-migrations_led"] },
   { "q": "How long did the PHP to Node.js migration take and how big was the team?", "expect": ["modernise-"] },
   { "q": "Why didn't you just migrate the database once?", "expect": ["modernise-why"] },
-  { "q": "How did you use feature flags in a migration?", "expect": ["modernise-"] }
+  { "q": "How did you use feature flags in a migration?", "expect": ["modernise-"] },
+  { "q": "How do you prevent hallucinations?", "expect": ["genai-hallucination_control", "agentic-practices-safety"] },
+  { "q": "How do you keep LLM token costs down?", "expect": ["genai-llm_cost_control", "agentic-practices-safety", "agentic-guardrails"] },
+  { "q": "Which LLM providers have you worked with?", "expect": ["genai-llm_providers_and_models", "agentic-practices-output", "project-"] },
+  { "q": "Have you used Claude or the Anthropic API?", "expect": ["genai-llm_providers_and_models", "project-", "agentic-practices-output"] },
+  { "q": "Have you run local models with Ollama?", "expect": ["genai-llm_providers_and_models", "project-", "agentic-practices-output"] },
+  { "q": "How do you get structured JSON output from an LLM?", "expect": ["agentic-practices-output", "project-"] },
+  { "q": "Have you built an MCP server?", "expect": ["genai-mcp_experience", "project-", "agentic-"] },
+  { "q": "Have you done image generation with Gemini?", "expect": ["project-", "skills-ai_automation"] },
+  { "q": "How did you design the RAG chunking and retrieval?", "expect": ["agentic-rag", "genai-rag_experience", "project-0"] },
+  { "q": "Why didn't you use a vector database?", "expect": ["agentic-rag", "genai-rag_experience", "familiarity-ai"] },
+  { "q": "How do you keep agents safe in production?", "expect": ["genai-agent_safety_and_guardrails", "agentic-guardrails", "agentic-practices-safety"] },
+  { "q": "Why do you want a Gen AI role?", "expect": ["genai-why_genai_roles", "targeting", "qa-role_preference"] },
+  { "q": "What Gen AI work have you shipped?", "expect": ["genai-genai_experience", "agentic-"] }
 ]

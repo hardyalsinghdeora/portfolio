@@ -15,7 +15,7 @@ Constraints: Cloudflare Pages free tier, deployment by dashboard drag-and-drop (
 
 ## Decision
 
-1. **Chunk the profile into ~50 self-contained, titled passages.** There is one chunk per role, system, project, skill group, quick answer and case-study part. Titles double as human-readable sources.
+1. **Chunk the profile into ~70 self-contained, titled passages.** There is one chunk per role, system, project, skill group, quick answer and case-study part. Titles double as human-readable sources.
 2. **Hybrid retrieval.** BM25 with light stemming and a small synonym map, plus Gemini `gemini-embedding-001` vectors (768-d, normalised, cosine). The two rankings are fused with reciprocal rank fusion (k = 60).
 3. **Agent loop with Gemini function calling and three read-only tools.**
    - Step 1 runs with `toolConfig: ANY`, which forces retrieval.
@@ -30,7 +30,7 @@ Constraints: Cloudflare Pages free tier, deployment by dashboard drag-and-drop (
 | Option | Why not (yet) |
 |---|---|
 | Keep full-context prompting | Simple, but no citations, cost grows with the profile, and no agency. |
-| Cloudflare Vectorize + Workers AI embeddings | Needs extra bindings and a separate indexing step. At ~50 chunks, brute-force cosine in memory takes well under a millisecond. Worth it beyond ~10k chunks. |
+| Cloudflare Vectorize + Workers AI embeddings | Needs extra bindings and a separate indexing step. At ~70 chunks, brute-force cosine in memory takes well under a millisecond. Worth it beyond ~10k chunks. |
 | Embeddings only | Misses exact-match terms (tech names, "notice period") that BM25 gets right. The eval set includes these. |
 | LangChain / LangGraph | A heavy dependency for three tools and a four-step loop. The whole agent is ~150 lines I can explain line by line. |
 | Streaming the final answer token by token | The agent's tool steps are non-streaming. Answers are 2–5 sentences, so the latency gain doesn't justify handling a function call mid-stream. Revisit for longer answers. |
@@ -49,9 +49,9 @@ Constraints: Cloudflare Pages free tier, deployment by dashboard drag-and-drop (
 
 ## Evaluation
 
-`tests/evals.json` holds 28 questions recruiters actually ask, including "do you know Kubernetes / LangGraph / Bedrock?", each with the chunks that should answer it. On BM25 alone, the worst case, the result is **hit@5 = 28/28** and **hit@1 = 22/28**.
+`tests/evals.json` holds 49 questions recruiters actually ask. They include "do you know Kubernetes / LangGraph / Bedrock?" and 13 Gen AI interview questions, such as hallucination control, token cost, structured output and "why no vector database?". Each question lists the chunks that should answer it. On BM25 alone, the worst case, the result is **hit@5 = 49/49** and **hit@1 = 35/49**.
 
-Adding the working-familiarity chunks first regressed one question ("What are you working on right now?" matched the word "working"). The eval caught it, and a synonym for "now" / "currently" fixed it. That's the reason to keep the eval in the build. The browser test page runs the eval on every build.
+Adding the working-familiarity chunks first regressed one question ("What are you working on right now?" matched the word "working"). The eval caught it, and a synonym for "now" / "currently" fixed it. That's the reason to keep the eval in the build. `npm test` runs it headlessly, and CI won't deploy unless it passes. Expanding the set for Gen AI questions surfaced two more stemming gaps ("backfill" vs "backfilled", "safe" vs "safety"), and both were fixed with synonyms.
 
 Next:
 - add an LLM-as-judge pass on answer faithfulness;

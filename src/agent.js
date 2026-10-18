@@ -26,7 +26,7 @@ export const TOOLS = [{
   functionDeclarations: [
     {
       name: "search_profile",
-      description: "Search Hardyal's career profile (experience, systems, projects, skills, agentic AI work, two migration case studies, principles) and return the most relevant passages.",
+      description: "Search Hardyal's career profile (experience, systems, projects, skills, agentic AI and Gen AI work, LLM engineering practices, RAG design, two migration case studies, principles) and return the most relevant passages.",
       parameters: {
         type: "OBJECT",
         properties: {
@@ -44,7 +44,7 @@ export const TOOLS = [{
           section: {
             type: "STRING",
             enum: ["experience", "projects", "skills", "working_familiarity", "systems_owned", "case_studies", "agentic_ai",
-              "headline_metrics", "current_focus_2026", "targeting"],
+              "genai_quick_answers", "headline_metrics", "current_focus_2026", "targeting"],
           },
         },
         required: ["section"],

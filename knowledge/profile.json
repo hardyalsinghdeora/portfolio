@@ -12,9 +12,10 @@
   "identity": {
     "full_name": "Hardyal Singh Deora",
     "display_name": "Hardyal Singh",
-    "headline": "Principal Software Engineer | Commerce, Billing & Subscription Platforms | PostgreSQL · Node.js · TypeScript · AWS | Microservices, Live Database Migration, Technical Leadership",
-    "headline_short": "Principal Software Engineer | Commerce, Billing & Subscription Platforms",
-    "one_liner": "I build the systems that turn a signed contract into an invoice, an activation and a live subscription, and make them auditable enough that finance can rely on the numbers.",
+    "headline": "Agentic AI Architect & Principal Software Engineer | LLM agents, MCP tool use, hybrid RAG, multi-provider LLM integration | 15 years of production backend: TypeScript · Node.js · PostgreSQL · AWS",
+    "headline_short": "Agentic AI Architect · Principal Software Engineer",
+    "one_liner": "I build LLM agents that are safe to leave running: grounded in retrieved evidence, bounded in steps and cost, least-privilege by default, and auditable, on fifteen years of production backend engineering.",
+    "one_liner_platform": "I build the systems that turn a signed contract into an invoice, an activation and a live subscription, and make them auditable enough that finance can rely on the numbers.",
     "one_liner_edtech": "I build the systems that turn a school's purchase order into a student's first login.",
     "github_bio": "Commerce, billing & subscription platforms. TypeScript · Node · Postgres · AWS. India · Open to Remote.",
     "location": "Ahmedabad, Gujarat, India",
@@ -85,6 +86,8 @@
       "Senior Software Engineer (for the right platform scope)"
     ],
     "domains_of_strength": [
+      "LLM agents, tool use (MCP, function calling) and retrieval-augmented generation",
+      "AI developer tooling: code-review agents, guardrails and token-cost control",
       "Commerce & order-to-cash",
       "Billing, invoicing & subscriptions",
       "B2B SaaS platforms",
@@ -92,10 +95,22 @@
       "Data-model-heavy systems",
       "Legacy modernisation & migration"
     ],
-    "ideal_work": "Platforms mid-rebuild, estates that need migrating, domains where the data model is the hard part and the business rules are genuinely complicated."
+    "ideal_work": "First choice: building production LLM agents and AI platforms, where my backend discipline (idempotency, audit trails, rollback plans, cost budgets) is what the agent work is usually missing. Also: platforms mid-rebuild, estates that need migrating, domains where the data model is the hard part and the business rules are genuinely complicated."
   },
-  "summary": "Principal Software Engineer with 15 years in backend and distributed systems, specialising in commerce, billing and order-to-cash platforms for a B2B education business. Owns architecture across 12+ domain services behind a single API gateway and writes the technical specifications other engineers execute. Directed a live MySQL-to-PostgreSQL migration across six product lines with no maintenance window, and designed the finance-auditable billing, discounting and invoicing models the commercial platform runs on. Six years leading engineering teams: sprint delivery, code review as the quality bar, onboarding design and mentoring across several squads.",
+  "summary": "Agentic AI Architect and Principal Software Engineer. I design and ship LLM systems end to end: a hybrid-RAG agent with Gemini function calling and a retrieval eval set (this portfolio), an unattended MCP-based pull-request review agent that runs every 30 minutes at work, a code-review tool that puts Anthropic Claude, Google Gemini and local Ollama models behind one structured-output interface, an MCP server for image generation, and guardrail and token-cost tooling for AI coding agents. Underneath that is 15 years in backend and distributed systems, specialising in commerce, billing and order-to-cash platforms for a B2B education business. Owns architecture across 12+ domain services behind a single API gateway and writes the technical specifications other engineers execute. Directed a live MySQL-to-PostgreSQL migration across six product lines with no maintenance window, and designed the finance-auditable billing, discounting and invoicing models the commercial platform runs on. Six years leading engineering teams: sprint delivery, code review as the quality bar, onboarding design and mentoring across several squads.",
   "headline_metrics": [
+    {
+      "value": "3",
+      "label": "LLM providers (Anthropic Claude, Google Gemini, local Ollama) behind one structured-output code-review interface"
+    },
+    {
+      "value": "30 min",
+      "label": "cadence of the unattended MCP-based pull-request review agent in daily use at work"
+    },
+    {
+      "value": "≤ 4",
+      "label": "model calls per question in the portfolio agent's bounded function-calling loop (retrieve first, answer last)"
+    },
     {
       "value": "15",
       "label": "years building backend and platform systems"
@@ -111,10 +126,6 @@
     {
       "value": "~25,000",
       "label": "words of migration specification (seven documents) authored and executed by other engineers"
-    },
-    {
-      "value": "500k+",
-      "label": "records backfilled in the live migration, consolidated from two upstream systems of record"
     },
     {
       "value": "~30 → 4",
@@ -189,6 +200,7 @@
     ],
     "cloud_delivery": [
       "AWS (S3, CloudFront, SQS, RDS)",
+      "Cloudflare Workers, Pages and KV",
       "Azure",
       "Docker",
       "CI/CD",
@@ -202,15 +214,23 @@
       "Tailwind"
     ],
     "ai_automation": [
-      "Model Context Protocol (MCP) servers & clients",
-      "Scheduled agent pipelines for code review",
+      "Model Context Protocol (MCP) servers & clients (stdio and Streamable HTTP transports)",
+      "Gemini function calling / tool use with bounded agent loops",
+      "Retrieval-augmented generation: chunking, BM25, Gemini embeddings, reciprocal rank fusion, cited sources",
+      "Retrieval evaluation (hit@1 / hit@5 eval set run on every build)",
+      "Structured LLM output with JSON schemas (Zod, Gemini responseSchema)",
+      "Multi-provider LLM integration: Anthropic Claude SDK, Google Gemini API, local models via Ollama",
+      "Prompt and context engineering: diff budgeting, noise filtering, telling the model what it did not see",
+      "Token-cost control: output compression, offline indexes instead of live tool calls",
+      "Image generation via Gemini image models (Nano Banana)",
+      "Scheduled, unattended agent pipelines for code review",
       "LLM-assisted engineering workflows",
-      "LiveKit / WebRTC real-time voice agents",
-      "OpenAI Realtime & Gemini Realtime",
-      "Speech-to-text evaluation"
+      "LiveKit / WebRTC real-time voice agents (contributed)",
+      "OpenAI Realtime & Gemini Realtime (contributed)",
+      "Speech-to-text evaluation (contributed)"
     ],
     "integrations": [
-      "Zoho Creator / Deluge",
+      "Low-code platform scripting (finance records)",
       "Partner CRM (versioned API)",
       "Finance & HR system adapters",
       "Google Maps API"
@@ -391,7 +411,7 @@
     ],
     "numbers": {
       "timeline": "Under six months from first specification to steady state",
-      "records_backfilled": "500k+, consolidated from two upstream systems of record",
+      "records_backfilled": "consolidated from two upstream systems of record; the exact volume is company data, shared in conversation rather than in public",
       "product_lines": 6,
       "legacy_tables_to_generic": "~30 to 4",
       "specification": "~25,000 words across seven documents; designed and specified by me, executed by a platform team",
@@ -447,7 +467,8 @@
     "Real-time AI voice-agent pipeline on LiveKit/WebRTC with OpenAI and Gemini realtime models; assessed and rejected repurposing it for speech-to-text on cost grounds, recommended a dedicated STT plugin",
     "Staff identity consolidation: duplicate identities, stale access, consistent authorisation across services",
     "Engineering-ops automation: unattended scheduled PR review, PR inbox, build-release emails from the issue tracker, sprint/monthly briefings, tickets from conversation",
-    "Third-party low-code (Zoho Creator / Deluge) integration debugging for finance records"
+    "Built this portfolio's agent: Gemini function calling over hybrid RAG on a Cloudflare Worker, with a retrieval eval set and a headless test suite gating every deploy",
+    "Third-party low-code platform integration debugging for finance records"
   ],
   "agentic_ai": {
     "positioning": "Agentic AI Architect: a platform architect who builds LLM agents that are safe to leave running, bringing idempotency, audit trails, rollback plans and cost control from 15 years of finance-grade backend work.",
@@ -470,7 +491,37 @@
       "Human-in-the-loop review of agent output",
       "Guardrails: least privilege, read-only defaults, secrets kept out of the model context"
     ],
-    "not_yet_in_record": "AWS Bedrock, Vertex AI, LangChain/LangGraph, vector databases and LLM evaluation frameworks are at working-familiarity level (see working_familiarity), not production. The closest production-grade work is the hybrid RAG and tool-calling agent in this portfolio, which implements retrieval, rank fusion, a bounded agent loop and a retrieval eval set from first principles."
+    "not_yet_in_record": "AWS Bedrock, Vertex AI, LangChain/LangGraph, vector databases and LLM evaluation frameworks are at working-familiarity level (see working_familiarity), not production. The closest production-grade work is the hybrid RAG and tool-calling agent in this portfolio, which implements retrieval, rank fusion, a bounded agent loop and a retrieval eval set from first principles.",
+    "llm_engineering_practices": [
+      "Structured output over free text: review findings come back against a JSON schema (category, severity, file, line, explanation, suggested change), validated with Zod and sent to Gemini as a responseSchema, so the UI and the comment-posting step never parse prose.",
+      "Provider abstraction: one review interface over Anthropic Claude, Google Gemini and local Ollama models, so a team chooses its own cost, latency and privacy trade-off; keys stay on the user's machine and requests go straight to the provider.",
+      "Live model discovery: the Gemini model list is read from the API and filtered to text models instead of hard-coding IDs, because providers retire model IDs often enough that a fixed list rots.",
+      "Context budgeting: lockfiles, build output, binaries and snapshots are filtered out of a diff, the rest fills a character budget smallest-file-first, and the omitted files are named in the prompt so the model says its review is partial instead of guessing.",
+      "Recall-first prompting with ranking downstream: the reviewer is told to report every issue with a severity rather than self-filter, and a later step ranks and gates them, which separates detection from prioritisation.",
+      "Grounding: the portfolio agent's first step is forced to call a retrieval tool, answers are restricted to retrieved passages, and every answer ships with its sources and tool trace.",
+      "Bounded loops: a hard cap on model calls and tool calls per question, with the final step forced to answer, so cost and latency have a ceiling.",
+      "Graceful degradation: embeddings fail over to BM25, an LLM outage or quota limit falls back to scripted answers, and unknown tools or bad arguments come back to the model as errors instead of crashing the loop.",
+      "Secrets never in the model context: API keys read from the OS keychain at launch (MCP servers, database tools), never in config files, shell history, process arguments or transcripts.",
+      "Token cost as a design constraint: compress verbose tool output before it enters an agent's context, answer schema and code lookups from offline indexes, and disable idle MCP servers whose tool definitions tax every request."
+    ],
+    "rag_design": {
+      "corpus": "A structured career profile (JSON) chunked into ~70 self-contained, titled passages, one per role, system, project, skill group, case-study part and quick answer; titles double as the citations shown to visitors.",
+      "retrieval": "Hybrid: BM25 with light stemming and a domain synonym map, plus Gemini gemini-embedding-001 vectors (768-d, normalised, cosine), fused with reciprocal rank fusion (k = 60) so the two scorers need no score calibration.",
+      "why_no_vector_db": "At ~70 chunks, brute-force cosine in memory takes well under a millisecond; document vectors are computed once per isolate and cached in Cloudflare KV for 30 days. The search() interface is the seam where a vector store (Vectorize, pgvector) would plug in beyond ~10k chunks.",
+      "evaluation": "A retrieval eval set of recruiter questions with the chunks that should answer them, scored as hit@1 and hit@5 on BM25 alone (the worst case) by a headless test run that gates every deploy. It caught a real regression: adding a 'working familiarity' section made 'what are you working on now?' match the word 'working', fixed with a synonym for now/currently.",
+      "next_steps": "LLM-as-judge scoring of answer faithfulness against the retrieved passages, and logging low-score retrievals to grow the eval set from real questions."
+    }
+  },
+  "genai_quick_answers": {
+    "genai_experience": "Hands-on and shipped, not slideware: an unattended MCP-based pull-request review agent running every 30 minutes at work; this portfolio's agent (Gemini function calling over hybrid RAG, cited sources, retrieval evals in CI); a code-review tool over Claude, Gemini and Ollama with schema-validated output; an MCP server for image generation; and claude-toolkit, ten guardrail and token-cost tools for AI coding agents. I also contributed to a real-time voice-agent pipeline on LiveKit with OpenAI and Gemini realtime models.",
+    "rag_experience": "I built the retrieval behind this page from first principles: titled chunks, BM25 plus Gemini embeddings fused with reciprocal rank fusion, a KV-cached embedding index, BM25 fallback when the embedding API fails, and a hit@1/hit@5 eval set that runs before every deploy. I have not yet run a vector database in production; at this corpus size it would add cost without benefit, and the search() function is where one would plug in.",
+    "llm_providers_and_models": "Google Gemini (function calling, embeddings, image generation, realtime), Anthropic Claude (SDK in the code-review tool, and Claude Code with MCP servers day to day), OpenAI realtime models (contributed, voice agents), and local models through Ollama (for example qwen2.5-coder) where code must not leave the machine.",
+    "hallucination_control": "Force retrieval before answering, restrict answers to retrieved text, show sources and the tool trace, keep the system prompt explicit about ownership words (built vs contributed) and skill levels (production vs working familiarity), and test those rules: a test fails the build if a familiarity skill leaks into the production skills list.",
+    "llm_cost_control": "Cap model and tool calls per request, retrieve ~1-2k tokens of passages instead of stuffing the whole ~7k-token profile into every prompt, cache document embeddings, budget diff size before it reaches a model, compress tool output before it enters an agent's context, and let teams pick a free or local model where quality allows.",
+    "evaluation_approach": "Retrieval is measured, not eyeballed: an eval set of real recruiter questions scored as hit@1 and hit@5, run headlessly on every build so a regression blocks the deploy. Agent behaviour is tested against a mocked LLM API: forced first tool call, step cap, thought-signature echo, unknown tools, hidden reasoning. Next is LLM-as-judge faithfulness scoring.",
+    "mcp_experience": "I build and run MCP servers and clients: the unattended PR-review agent calls its tools through MCP; I wrote an image-generation MCP server with stdio and stateless Streamable HTTP transports sharing one tool definition file; and claude-toolkit manages MCP servers safely (reversible enable/disable with config backups) because every idle server's tool definitions cost tokens on every request.",
+    "agent_safety_and_guardrails": "Least privilege and reversible by default: production databases read-only unless explicitly overridden, secrets used by the agent but never shown to it, dry-run defaults, tools that only read, same-origin checks and per-IP rate limits on public endpoints, and human review of agent output before it changes anything that matters.",
+    "why_genai_roles": "Most agent projects are missing what I have spent fifteen years doing: idempotency, audit trails, rollback plans, cost budgets and systems finance can trust. Through 2026 I have been building agents with those properties, at work and in the open, and want to do it full time, as an Agentic AI Architect or on an AI platform team."
   },
   "projects": [
     {
@@ -512,8 +563,13 @@
     },
     {
       "name": "AI pull request reviewer (Chrome extension)",
-      "status": "In progress",
-      "summary": "Reviews Bitbucket PRs against a configurable standard, with a provider abstraction over hosted and local models so a team picks its own cost/latency/privacy trade-off."
+      "status": "Built, not yet launched",
+      "summary": "Reviews Bitbucket PRs against a configurable standard, with a provider abstraction over hosted and local models so a team picks its own cost/latency/privacy trade-off. TypeScript, React, Manifest V3. Providers: Anthropic Claude (SDK, streamed summaries), Google Gemini (free tier, live model discovery) and Ollama (fully local). Full reviews come back as schema-validated JSON (category, severity, file, line, suggested change) and render as findings anchored to diff lines, postable as inline comments. Diffs are noise-filtered and fitted to a context budget smallest-file-first, with omitted files named to the model. Scheduling runs on chrome.alarms because MV3 service workers are killed when idle."
+    },
+    {
+      "name": "Image-generation MCP server (Nano Banana)",
+      "status": "In personal use",
+      "summary": "A minimal Model Context Protocol server, in Node.js, that gives Claude real image generation through Google's Gemini image model. Two tools: generate_image (text to image) and edit_image (reference image plus prompt, for consistent series and targeted edits). One tool-definition module is shared by two entrypoints: stdio for Claude Code, and stateless Streamable HTTP for claude.ai custom connectors, deployable to Cloud Run with the included Dockerfile. The API key is read from the OS keychain at launch, so it never lands in config, a .env file or process arguments; the model is pinned by an environment variable so a newer model needs no code change."
     },
     {
       "name": "Migration case study (public)",
@@ -573,10 +629,10 @@
     "current_role": "Principal Software Engineer at Educational Initiatives (Ei), Ahmedabad — 10 years there, 15 years total.",
     "notice_period": "Notice period 30 days; can join 30 days from offer acceptance.",
     "location_preference": "Ahmedabad-based; open to remote or hybrid, on-site in Pune, Bengaluru or Hyderabad, or relocation anywhere in India.",
-    "role_preference": "Principal / Staff Engineer, Software Architect or Engineering Manager; backend/platform, commerce/billing or data-model-heavy domains.",
-    "core_stack": "TypeScript/Node.js, PostgreSQL, microservices behind an API gateway, AWS; Angular on the front end; MCP/LLM tooling.",
+    "role_preference": "First choice: Agentic AI Architect, AI Platform / AI Technical Architect, or a Principal / Staff Engineer role building LLM agents and AI platforms. Also Principal / Staff Engineer, Software Architect or Engineering Manager on backend/platform, commerce/billing or data-model-heavy systems.",
+    "core_stack": "AI: Gemini function calling and embeddings, Anthropic Claude SDK, Ollama, MCP servers and clients, hybrid RAG (BM25 + embeddings + RRF), JSON-schema structured output. Platform: TypeScript/Node.js, PostgreSQL, microservices behind an API gateway, AWS, Cloudflare Workers; Angular on the front end.",
     "migrations_led": "Three migrations, all with users working throughout: (1) as Principal, directed the live MySQL→PostgreSQL migration of a B2B commerce platform across six product lines with no maintenance window and zero customer-visible incidents; (2) as Lead, designed and led a strangler migration of a live PHP/MySQL application to Node.js microservices on PostgreSQL with an Angular UI (70 pages, 12 modules, 3 months, 2 developers), using a shared PHP-session + JWT login and per-module MySQL write flags, then retired the legacy app with no user-visible interruption; (3) as Lead, moved a legacy product's full user base from PHP 5.3 to PHP 7.3 and decommissioned the old servers.",
-    "biggest_achievement": "Directed a no-downtime MySQL→PostgreSQL migration across six product lines in under six months: 500k+ records backfilled, ~30 legacy tables consolidated into 4, zero customer-visible incidents, from a 25k-word spec other engineers executed.",
+    "biggest_achievement": "Directed a no-downtime MySQL→PostgreSQL migration across six product lines in under six months: ~30 legacy tables consolidated into 4, zero customer-visible incidents, from a 25k-word spec other engineers executed. In AI, the unattended MCP-based PR-review agent the team relies on every day.",
     "team_size_led": "Squad lead for 4; guide ~10 engineers across teams; ~6 years in lead roles.",
     "links": "LinkedIn: linkedin.com/in/hardyalsinghdeora · GitHub: github.com/hardyalsinghdeora · Email: hardyalsinghdeora@gmail.com"
   }

@@ -1,0 +1,5 @@
+# For `npx wrangler pages deploy dist` and `npx wrangler pages dev dist`.
+# Secrets (GEMINI_API_KEY) are set in the Cloudflare dashboard or with `wrangler pages secret put`.
+name = "hardyalsinghdeora"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"

@@ -1,0 +1,22 @@
+[
+  { "q": "How do you build AI agents?", "expect": ["agentic-"] },
+  { "q": "Have you used RAG or embeddings?", "expect": ["agentic-", "project-0"] },
+  { "q": "Tell me about the PR review agent", "expect": ["agentic-agents", "project-"] },
+  { "q": "What is MCP and where did you use it?", "expect": ["agentic-", "skills-ai_automation", "project-"] },
+  { "q": "What is your notice period?", "expect": ["availability", "qa-notice_period"] },
+  { "q": "Are you open to relocation?", "expect": ["availability", "qa-location_preference"] },
+  { "q": "How do I contact you?", "expect": ["contact"] },
+  { "q": "Tell me about the database migration", "expect": ["migration-", "system-1"] },
+  { "q": "How many records did you backfill?", "expect": ["migration-results", "metrics", "qa-biggest_achievement"] },
+  { "q": "Which options did you reject for the migration?", "expect": ["migration-context"] },
+  { "q": "What is your tech stack?", "expect": ["skills-", "qa-core_stack"] },
+  { "q": "Do you know PostgreSQL?", "expect": ["skills-data", "migration-", "system-1", "qa-"] },
+  { "q": "How big a team have you led?", "expect": ["qa-team_size_led", "exp-0", "metrics"] },
+  { "q": "What did you do at Ilogix Infotech?", "expect": ["exp-4"] },
+  { "q": "What is claude-toolkit?", "expect": ["project-1", "agentic-guardrails"] },
+  { "q": "Tell me about the discount engine and billing", "expect": ["system-0", "exp-0", "skills-commerce_billing"] },
+  { "q": "What certifications do you have?", "expect": ["education"] },
+  { "q": "What roles are you looking for?", "expect": ["targeting", "qa-role_preference"] },
+  { "q": "What are you working on right now?", "expect": ["current-focus"] },
+  { "q": "Have you worked on voice agents?", "expect": ["agentic-guardrails", "skills-ai_automation", "current-focus"] }
+]

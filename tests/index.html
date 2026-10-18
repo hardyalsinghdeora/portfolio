@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio agent tests</title>
+<style>
+  :root { --ok:#0a7d3b; --bad:#b42318; --ink:#111; --muted:#555; --bg:#fff; --line:#ddd; }
+  @media (prefers-color-scheme: dark) { :root { --ok:#4ade80; --bad:#f87171; --ink:#eee; --muted:#aaa; --bg:#111; --line:#333; } }
+  body { margin:0; padding:24px 16px; font:14px/1.5 system-ui, sans-serif; color:var(--ink); background:var(--bg); max-width:900px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  #summary { font-weight:600; margin:8px 0 16px; }
+  .t { padding:6px 0; border-bottom:1px solid var(--line); }
+  .ok::before { content:"PASS  "; color:var(--ok); font-weight:700; }
+  .bad::before { content:"FAIL  "; color:var(--bad); font-weight:700; }
+  pre { white-space:pre-wrap; color:var(--muted); margin:4px 0 0; font-size:12px; }
+  table { border-collapse:collapse; width:100%; margin-top:8px; font-size:12px; }
+  td, th { border-bottom:1px solid var(--line); text-align:left; padding:4px 6px; vertical-align:top; }
+</style>
+</head>
+<body>
+<h1>Portfolio agent tests</h1>
+<p style="color:var(--muted);margin:0">Runs the real modules from <code>src/</code> with a mocked Gemini API. No network, no API key.</p>
+<div id="summary">Running…</div>
+<div id="out"></div>
+<h2 style="font-size:16px;margin-top:24px">Retrieval eval (BM25 only)</h2>
+<div id="evals"></div>
+<script type="module">
+import { PROFILE } from "../src/knowledge.js";
+import { buildChunks, buildIndex, bm25, search, rrf, tokenize } from "../src/rag.js";
+import { runAgent, MAX_STEPS } from "../src/agent.js";
+import { handle, validTurns, SEP } from "../src/worker.js";
+
+const out = document.getElementById("out");
+const results = [];
+async function test(name, fn) {
+  try { await fn(); results.push({ name, ok: true }); }
+  catch (e) { results.push({ name, ok: false, err: e && (e.stack || e.message || String(e)) }); }
+}
+function assert(c, msg) { if (!c) throw new Error(msg || "assertion failed"); }
+function eq(a, b, msg) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((msg || "not equal") + `: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
+
+const chunks = buildChunks(PROFILE);
+const index = buildIndex(chunks);
+
+// Deterministic stand-in for Gemini embeddings: hashed bag of words, 768 dims.
+function fakeVector(text) {
+  const v = new Array(768).fill(0);
+  for (const t of tokenize(text)) { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) >>> 0; v[h % 768] += 1; }
+  return v;
+}
+
+// Mock of the Gemini REST API. `script` is a list of generateContent replies (parts arrays).
+function mockGemini({ script = [], embed = "ok", calls = [] } = {}) {
+  let step = 0;
+  return async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url, body });
+    if (url.includes(":batchEmbedContents")) {
+      if (embed === "fail") return new Response("quota", { status: 429 });
+      return Response.json({ embeddings: body.requests.map((r) => ({ values: fakeVector(r.content.parts[0].text) })) });
+    }
+    if (url.includes(":generateContent")) {
+      if (script === "429") return new Response("quota", { status: 429 });
+      const parts = script[Math.min(step++, script.length - 1)];
+      return Response.json({ candidates: [{ content: { role: "model", parts } }] });
+    }
+    return new Response("unexpected " + url, { status: 500 });
+  };
+}
+
+// ---- chunking & retrieval ----
+await test("profile chunks into small, unique, titled passages", () => {
+  assert(chunks.length >= 40, "expected 40+ chunks, got " + chunks.length);
+  eq(new Set(chunks.map((c) => c.id)).size, chunks.length, "chunk ids unique");
+  for (const c of chunks) {
+    assert(c.title && c.text.length > 20, "empty chunk " + c.id);
+    assert(c.text.length < 2600, `chunk ${c.id} too long (${c.text.length})`);
+    assert(!/undefined/.test(c.text), "undefined leaked into chunk " + c.id);
+  }
+});
+await test("agentic AI section is indexed", () => {
+  for (const id of ["agentic-overview", "agentic-agents", "agentic-guardrails"]) assert(chunks.some((c) => c.id === id), id);
+});
+// Any Indian mobile number (optionally +91-prefixed) counts as a leak.
+const PHONE = /(?:\+91[-\s]?)?\b[6-9]\d{9}\b/;
+await test("no phone number anywhere in the public knowledge base", () => {
+  assert(!PHONE.test(JSON.stringify(PROFILE)), "phone-like number found");
+});
+await test("BM25 ranks the notice-period chunk first", () => {
+  const top = bm25(index, "what is your notice period")[0];
+  assert(["availability", "qa-notice_period"].includes(chunks[top.i].id), chunks[top.i].id);
+});
+await test("synonyms: 'RAG' finds the retrieval passages", () => {
+  const ids = bm25(index, "RAG").slice(0, 5).map((x) => chunks[x.i].id);
+  assert(ids.some((id) => id.startsWith("agentic-") || id === "project-0"), ids.join(","));
+});
+await test("reciprocal rank fusion rewards agreement", () => {
+  const fused = rrf([[{ i: 1 }, { i: 2 }], [{ i: 2 }, { i: 3 }]]);
+  eq(fused[0].i, 2);
+});
+await test("hybrid search uses embeddings when the key is set", async () => {
+  const calls = [];
+  const r = await search(index, "voice agents on WebRTC", { env: { GEMINI_API_KEY: "test", GEMINI_EMBED_MODEL: "m-" + Math.random() }, fetchImpl: mockGemini({ calls }) });
+  eq(r.mode, "hybrid");
+  assert(r.hits.length === 5, "5 hits");
+  assert(calls.filter((c) => c.url.includes("batchEmbed")).length === 2, "doc batch + query embed");
+  assert(calls[0].body.requests[0].taskType === "RETRIEVAL_DOCUMENT" || calls[1].body.requests[0].taskType === "RETRIEVAL_DOCUMENT");
+});
+await test("document vectors are cached across questions", async () => {
+  const env = { GEMINI_API_KEY: "test", GEMINI_EMBED_MODEL: "cache-test" };
+  const calls = [];
+  await search(index, "first question", { env, fetchImpl: mockGemini({ calls }) });
+  await search(index, "second question", { env, fetchImpl: mockGemini({ calls }) });
+  eq(calls.filter((c) => c.body.requests.length > 1).length, 1, "documents embedded once");
+});
+await test("falls back to BM25 when the embedding API fails", async () => {
+  const r = await search(index, "notice period", { env: { GEMINI_API_KEY: "t", GEMINI_EMBED_MODEL: "fail-" + Math.random() }, fetchImpl: mockGemini({ embed: "fail" }) });
+  eq(r.mode, "bm25");
+  assert(r.hits.length > 0);
+});
+await test("RAG_EMBEDDINGS=off skips the embedding API", async () => {
+  const calls = [];
+  const r = await search(index, "stack", { env: { GEMINI_API_KEY: "t", RAG_EMBEDDINGS: "off" }, fetchImpl: mockGemini({ calls }) });
+  eq(r.mode, "bm25"); eq(calls.length, 0);
+});
+
+// ---- agent loop ----
+const env = { GEMINI_API_KEY: "test", RAG_EMBEDDINGS: "off" };
+const turns = [{ role: "user", content: "How do you build AI agents?" }];
+
+await test("agent: tool call, then a grounded answer with sources", async () => {
+  const calls = [];
+  const fetchImpl = mockGemini({ calls, script: [
+    [{ functionCall: { name: "search_profile", args: { query: "AI agents in production" } }, thoughtSignature: "sig-1" }],
+    [{ text: "I run an unattended PR-review agent." }],
+  ] });
+  const r = await runAgent({ turns, index, profile: PROFILE, env, fetchImpl });
+  eq(r.text, "I run an unattended PR-review agent.");
+  eq(r.steps.length, 1); eq(r.steps[0].tool, "search_profile");
+  assert(r.sources.length > 0 && r.sources.length <= 5, "1-5 sources");
+  assert(r.sources.some((s) => s.id.startsWith("agentic-")), "agentic source: " + r.sources.map((s) => s.id));
+  eq(r.retrieval, "bm25");
+  const gen = calls.filter((c) => c.url.includes(":generateContent"));
+  eq(gen.map((c) => c.body.toolConfig.functionCallingConfig.mode), ["ANY", "AUTO"]);
+  const second = gen[1].body.contents;
+  eq(second[1].parts[0].thoughtSignature, "sig-1", "model turn echoed verbatim");
+  assert(second[2].parts[0].functionResponse.response.passages.length > 0, "passages returned to model");
+  assert(!PHONE.test(JSON.stringify(gen[0].body)), "phone-like number sent to the model");
+});
+await test("agent: get_section and contact tools", async () => {
+  const fetchImpl = mockGemini({ script: [
+    [{ functionCall: { name: "get_section", args: { section: "experience" } } },
+     { functionCall: { name: "get_contact_and_availability", args: {} } }],
+    [{ text: "Here you go." }],
+  ] });
+  const r = await runAgent({ turns, index, profile: PROFILE, env, fetchImpl });
+  eq(r.steps.map((s) => s.tool), ["get_section", "get_contact_and_availability"]);
+  assert(r.sources.some((s) => s.id === "contact"));
+});
+await test("agent: loop is bounded and the last step forces an answer", async () => {
+  const calls = [];
+  const fetchImpl = mockGemini({ calls, script: [
+    [{ functionCall: { name: "search_profile", args: { query: "x" } } }],
+    [{ functionCall: { name: "search_profile", args: { query: "y" } } }],
+    [{ functionCall: { name: "search_profile", args: { query: "z" } } }],
+    [{ text: "Final." }],
+  ] });
+  const r = await runAgent({ turns, index, profile: PROFILE, env, fetchImpl });
+  eq(r.text, "Final.");
+  const modes = calls.filter((c) => c.url.includes(":generateContent")).map((c) => c.body.toolConfig.functionCallingConfig.mode);
+  eq(modes.length, MAX_STEPS); eq(modes[modes.length - 1], "NONE");
+});
+await test("agent: unknown tools and empty queries return errors, not crashes", async () => {
+  const fetchImpl = mockGemini({ script: [
+    [{ functionCall: { name: "delete_everything", args: {} } }, { functionCall: { name: "search_profile", args: {} } }],
+    [{ text: "ok" }],
+  ] });
+  const r = await runAgent({ turns, index, profile: PROFILE, env, fetchImpl });
+  eq(r.text, "ok"); eq(r.sources.length, 0);
+});
+await test("agent: thought parts are never shown", async () => {
+  const fetchImpl = mockGemini({ script: [
+    [{ functionCall: { name: "search_profile", args: { query: "stack" } } }],
+    [{ text: "secret reasoning", thought: true }, { text: "Visible." }],
+  ] });
+  eq((await runAgent({ turns, index, profile: PROFILE, env, fetchImpl })).text, "Visible.");
+});
+
+// ---- worker ----
+function req(path, init = {}) { return new Request("https://hardyalsinghdeora.pages.dev" + path, init); }
+const post = (body, headers = {}) => req("/api/ask", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+const assets = { fetch: async () => new Response("static") };
+
+await test("worker: /api/ask returns text, separator and meta JSON", async () => {
+  const fetchImpl = mockGemini({ script: [
+    [{ functionCall: { name: "search_profile", args: { query: "notice period" } } }],
+    [{ text: "30 days." }],
+  ] });
+  const res = await handle(post({ messages: turns }), { ...env, ASSETS: assets }, fetchImpl);
+  eq(res.status, 200);
+  const body = await res.text();
+  const [text, meta] = body.split(SEP);
+  eq(text, "30 days.");
+  const m = JSON.parse(meta);
+  assert(Array.isArray(m.sources) && m.sources.length > 0); eq(m.steps.length, 1);
+  assert(!("text" in m.sources[0]), "passages not leaked in meta");
+});
+await test("worker: errors and guards", async () => {
+  const E = { ...env, ASSETS: assets };
+  eq((await handle(req("/api/ask"), E, mockGemini())).status, 405);
+  eq((await handle(post({ messages: [] }), E, mockGemini())).status, 400);
+  eq((await handle(req("/api/ask", { method: "POST", body: "{" }), E, mockGemini())).status, 400);
+  eq((await handle(post({ messages: turns }), { ASSETS: assets }, mockGemini())).status, 503);
+  // Browsers drop a forged Origin on Request objects, so use a request-like object here.
+  const crossSite = { url: "https://hardyalsinghdeora.pages.dev/api/ask", method: "POST",
+    headers: new Headers({ origin: "https://evil.example" }), json: async () => ({ messages: turns }) };
+  eq((await handle(crossSite, E, mockGemini())).status, 403);
+  eq((await handle(post({ messages: turns }), E, mockGemini({ script: "429" }))).status, 429);
+  eq(await (await handle(req("/"), E, mockGemini())).text(), "static");
+});
+await test("worker: /api/search returns ranked passages without calling the LLM", async () => {
+  const calls = [];
+  const res = await handle(req("/api/search?q=migration%20backfill&k=3"), { ...env, ASSETS: assets }, mockGemini({ calls }));
+  const data = await res.json();
+  eq(res.status, 200); eq(data.hits.length, 3); eq(calls.length, 0);
+  assert(data.hits[0].id.startsWith("migration") || data.hits[0].id === "system-1" || data.hits[0].id === "metrics", data.hits[0].id);
+});
+await test("validTurns trims history and rejects malformed turns", () => {
+  eq(validTurns([{ role: "assistant", content: "x" }, { role: "user", content: " hi " }]), [{ role: "user", content: "hi" }]);
+  eq(validTurns([{ role: "user", content: "a" }, { role: "assistant", content: "b" }]), null);
+  eq(validTurns([{ role: "system", content: "a" }]), null);
+  eq(validTurns("nope"), null);
+});
+
+// ---- retrieval eval ----
+const evals = await (await fetch("./evals.json")).json();
+let hit1 = 0, hit5 = 0;
+const rows = evals.map((e) => {
+  const ids = bm25(index, e.q).slice(0, 5).map((x) => chunks[x.i].id);
+  const ok = (id) => e.expect.some((p) => id === p || (p.endsWith("-") && id.startsWith(p)) || id.startsWith(p + "-") || id === p);
+  const h1 = ids.length && ok(ids[0]), h5 = ids.some(ok);
+  hit1 += h1 ? 1 : 0; hit5 += h5 ? 1 : 0;
+  return `<tr><td>${h5 ? "✓" : "✗"}</td><td>${e.q}</td><td>${ids.join(", ")}</td></tr>`;
+});
+await test(`retrieval eval: hit@5 ≥ 90% (${hit5}/${evals.length}), hit@1 ${hit1}/${evals.length}`, () => {
+  assert(hit5 / evals.length >= 0.9, `hit@5 ${hit5}/${evals.length}`);
+});
+document.getElementById("evals").innerHTML =
+  `<p>hit@1 <b>${hit1}/${evals.length}</b> · hit@5 <b>${hit5}/${evals.length}</b> · ${chunks.length} chunks</p>` +
+  `<table><tr><th></th><th>Question</th><th>Top 5 chunk ids</th></tr>${rows.join("")}</table>`;
+
+// ---- report ----
+const failed = results.filter((r) => !r.ok);
+out.innerHTML = results.map((r) => `<div class="t ${r.ok ? "ok" : "bad"}">${r.name}${r.ok ? "" : `<pre>${String(r.err).replace(/</g, "&lt;")}</pre>`}</div>`).join("");
+document.getElementById("summary").textContent = `${results.length - failed.length}/${results.length} passed`;
+window.__TESTS__ = { passed: results.length - failed.length, total: results.length, failed: failed.map((f) => f.name + ": " + f.err), hit1, hit5, evals: evals.length };
+</script>
+</body>
+</html>

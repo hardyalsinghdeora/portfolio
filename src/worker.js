@@ -27,9 +27,18 @@ export default {
   fetch: (request, env) => handle(request, env, fetch),
 };
 
+// Short, stable links the agent can quote without mangling a long GitHub URL.
+export const SHORT_LINKS = {
+  "/case/php-to-node": "https://github.com/hardyalsinghdeora/portfolio/blob/main/docs/case-study-php-to-node-strangler.md",
+  "/case/db-migration": "https://github.com/hardyalsinghdeora/case-studies/blob/main/migration-live-commerce-platform.md",
+  "/source": "https://github.com/hardyalsinghdeora/portfolio",
+};
+
 // fetchImpl is injectable so tests can stand in for the Gemini API.
 export async function handle(request, env, fetchImpl) {
   const url = new URL(request.url);
+  const target = SHORT_LINKS[url.pathname.replace(/\/+$/, "")];
+  if (target) return Response.redirect(target, 302);
   try {
     if (url.pathname === "/api/ask") {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });

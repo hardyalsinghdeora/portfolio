@@ -236,6 +236,15 @@ await test("worker: /api/search returns ranked passages without calling the LLM"
   eq(res.status, 200); eq(data.hits.length, 3); eq(calls.length, 0);
   assert(data.hits[0].id.startsWith("migration") || data.hits[0].id === "system-1" || data.hits[0].id === "metrics", data.hits[0].id);
 });
+await test("worker: short case-study links redirect to the write-ups", async () => {
+  const E = { ...env, ASSETS: assets };
+  for (const path of ["/case/php-to-node", "/case/db-migration/", "/source"]) {
+    const res = await handle(req(path), E, mockGemini());
+    eq(res.status, 302, path);
+    assert(res.headers.get("location").startsWith("https://github.com/hardyalsinghdeora/"), path);
+  }
+  assert(JSON.stringify(PROFILE).includes("pages.dev/case/php-to-node"), "profile uses the short link");
+});
 await test("validTurns trims history and rejects malformed turns", () => {
   eq(validTurns([{ role: "assistant", content: "x" }, { role: "user", content: " hi " }]), [{ role: "user", content: "hi" }]);
   eq(validTurns([{ role: "user", content: "a" }, { role: "assistant", content: "b" }]), null);

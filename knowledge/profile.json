@@ -373,7 +373,7 @@
   ],
   "migration_case_study": {
     "title": "Moving a live commerce platform between two databases without a maintenance window",
-    "url": "https://github.com/hardyalsinghdeora/case-studies/blob/main/migration-live-commerce-platform.md",
+    "url": "https://hardyalsinghdeora.pages.dev/case/db-migration",
     "context": "B2B commerce platform selling annual seat-based contracts; six product lines, each with its own pricing shape; a dozen services; a ~15-year-old MySQL estate replaced by domain services on PostgreSQL, both live with customers throughout. Legacy products were not retired, so the result was two systems of record, both live, converging slowly.",
     "options_rejected": [
       "Freeze, dump, restore: unbounded failure mode, no quick way back from a failed restore",
@@ -414,7 +414,7 @@
   },
   "modernisation_case_study": {
     "title": "Replacing a live PHP application with Node.js microservices and Angular, without users noticing",
-    "url": "https://github.com/hardyalsinghdeora/portfolio/blob/main/docs/case-study-php-to-node-strangler.md",
+    "url": "https://hardyalsinghdeora.pages.dev/case/php-to-node",
     "role": "Designed and led it, as Lead Software Engineer (2020-2024), with a team of 2 developers. A separate project from the later MySQL-to-PostgreSQL commerce migration.",
     "numbers": {
       "pages_migrated": 70,

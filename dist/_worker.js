@@ -377,7 +377,7 @@ const PROFILE = {
   ],
   "migration_case_study": {
     "title": "Moving a live commerce platform between two databases without a maintenance window",
-    "url": "https://github.com/hardyalsinghdeora/case-studies/blob/main/migration-live-commerce-platform.md",
+    "url": "https://hardyalsinghdeora.pages.dev/case/db-migration",
     "context": "B2B commerce platform selling annual seat-based contracts; six product lines, each with its own pricing shape; a dozen services; a ~15-year-old MySQL estate replaced by domain services on PostgreSQL, both live with customers throughout. Legacy products were not retired, so the result was two systems of record, both live, converging slowly.",
     "options_rejected": [
       "Freeze, dump, restore: unbounded failure mode, no quick way back from a failed restore",
@@ -418,7 +418,7 @@ const PROFILE = {
   },
   "modernisation_case_study": {
     "title": "Replacing a live PHP application with Node.js microservices and Angular, without users noticing",
-    "url": "https://github.com/hardyalsinghdeora/portfolio/blob/main/docs/case-study-php-to-node-strangler.md",
+    "url": "https://hardyalsinghdeora.pages.dev/case/php-to-node",
     "role": "Designed and led it, as Lead Software Engineer (2020-2024), with a team of 2 developers. A separate project from the later MySQL-to-PostgreSQL commerce migration.",
     "numbers": {
       "pages_migrated": 70,
@@ -883,6 +883,7 @@ const MAX_SOURCES = 5;
 const SYSTEM = [
   "You are the assistant on Hardyal Singh's portfolio site and you answer in first person as Hardyal.",
   "You have tools that read Hardyal's career profile. Before answering any question about his work, skills, projects, numbers or availability, call search_profile (rephrase the question into a good search query; call it again with a different query if the first results don't cover the question). Use get_section when you need a whole section, such as every role in his experience, and get_contact_and_availability for contact, notice period, location or relocation questions.",
+  "Copy any link exactly as it appears in the passages; never shorten, rebuild or guess a URL.",
   "Answer ONLY from what the tools return. Be concrete, warm and brief: 2-5 short sentences, or a short list if the question asks for a list. Plain text, no markdown headings.",
   "If the tools don't cover something, say so plainly and point to email hardyalsinghdeora@gmail.com. Never invent experience, numbers, employers or technologies.",
   "When asked whether I know a technology, search for it first. Answer at the level the profile states: production skills as production experience; items under 'working familiarity' as exactly that (I know it at a working level from courses and side projects, not in production), then name the closest production experience the profile gives. Never upgrade familiarity to production experience. Only if the tools return nothing about it, say it is not something I have listed and name the closest thing I have used.",
@@ -1056,9 +1057,18 @@ export default {
   fetch: (request, env) => handle(request, env, fetch),
 };
 
+// Short, stable links the agent can quote without mangling a long GitHub URL.
+const SHORT_LINKS = {
+  "/case/php-to-node": "https://github.com/hardyalsinghdeora/portfolio/blob/main/docs/case-study-php-to-node-strangler.md",
+  "/case/db-migration": "https://github.com/hardyalsinghdeora/case-studies/blob/main/migration-live-commerce-platform.md",
+  "/source": "https://github.com/hardyalsinghdeora/portfolio",
+};
+
 // fetchImpl is injectable so tests can stand in for the Gemini API.
 async function handle(request, env, fetchImpl) {
   const url = new URL(request.url);
+  const target = SHORT_LINKS[url.pathname.replace(/\/+$/, "")];
+  if (target) return Response.redirect(target, 302);
   try {
     if (url.pathname === "/api/ask") {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });

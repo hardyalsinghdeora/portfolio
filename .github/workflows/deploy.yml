@@ -1,0 +1,35 @@
+# Deploys dist/ to the existing Cloudflare Pages project on every push to main.
+# One-time setup (repo > Settings > Secrets and variables > Actions):
+#   CLOUDFLARE_API_TOKEN   token with the "Cloudflare Pages: Edit" permission
+#   CLOUDFLARE_ACCOUNT_ID  shown on the Workers & Pages overview page
+# The worker's own secret (GEMINI_API_KEY) stays in the Pages project settings.
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the bundle is present
+        run: test -f dist/_worker.js && test -f dist/index.html
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=hardyalsinghdeora --branch=main --commit-dirty=true

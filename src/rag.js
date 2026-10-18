@@ -113,19 +113,19 @@ export function buildChunks(p) {
 
   const m = p.migration_case_study;
   if (m) {
-    add("migration-context", "Migration case study: context and options rejected", "migration_case_study",
+    add("migration-context", "Migration case study: context and options rejected", "case_studies",
       `${m.title}\n${m.context}\nOptions rejected:\n${list(m.options_rejected)}\nURL: ${m.url}`);
-    add("migration-design", "Migration case study: design", "migration_case_study", list(m.design));
-    add("migration-results", "Migration case study: numbers and lessons", "migration_case_study",
+    add("migration-design", "Migration case study: design", "case_studies", list(m.design));
+    add("migration-results", "Migration case study: numbers and lessons", "case_studies",
       Object.entries(m.numbers || {}).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n") +
       `\nLesson: ${m.lesson}\nWould do differently:\n${list(m.would_do_differently)}\nPrinciples:\n${list(m.principles)}`);
   }
 
   const mo = p.modernisation_case_study;
   if (mo) {
-    add("modernise-context", "Case study: PHP to Node.js and Angular strangler migration", "modernisation_case_study",
+    add("modernise-context", "Case study: PHP to Node.js and Angular strangler migration", "case_studies",
       `${mo.title}\nRole: ${mo.role}\n${mo.context}\nOutcome: ${mo.outcome}\nPatterns: ${(mo.patterns || []).join(", ")}\nURL: ${mo.url}`);
-    add("modernise-approach", "Case study: PHP to Node.js migration, approach and trade-offs", "modernisation_case_study",
+    add("modernise-approach", "Case study: PHP to Node.js migration, approach and trade-offs", "case_studies",
       `${list(mo.approach)}\nTrade-offs:\n${list(mo.trade_offs)}`);
   }
 
@@ -151,7 +151,9 @@ export function buildChunks(p) {
   add("linkedin", "LinkedIn profile", "linkedin",
     `URL: ${li.url}\nListed skills: ${(li.listed_skills || []).join(", ")}`);
   for (const [k, v] of Object.entries(p.recruiter_quick_answers || {})) {
-    add("qa-" + k, "Quick answer: " + k.replace(/_/g, " "), "recruiter_quick_answers", v);
+    // The cross-project migrations summary also belongs to the case_studies section,
+    // so get_section("case_studies") returns every migration, not just one write-up.
+    add("qa-" + k, "Quick answer: " + k.replace(/_/g, " "), k === "migrations_led" ? "case_studies" : "recruiter_quick_answers", v);
   }
   return c;
 }

@@ -41,7 +41,7 @@ export const TOOLS = [{
         properties: {
           section: {
             type: "STRING",
-            enum: ["experience", "projects", "skills", "working_familiarity", "systems_owned", "migration_case_study", "modernisation_case_study", "agentic_ai",
+            enum: ["experience", "projects", "skills", "working_familiarity", "systems_owned", "case_studies", "agentic_ai",
               "headline_metrics", "current_focus_2026", "targeting"],
           },
         },

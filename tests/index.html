@@ -85,6 +85,10 @@ await test("working-familiarity items are indexed and labelled as not production
   for (const c of fam) assert(/not production/i.test(c.title), c.title);
   assert(!chunks.some((c) => c.section === "skills" && /kubernetes|kafka|langgraph/i.test(c.text)), "familiarity item leaked into production skills");
 });
+await test("case_studies section covers every migration", () => {
+  const ids = chunks.filter((c) => c.section === "case_studies").map((c) => c.id);
+  for (const want of ["migration-context", "modernise-context", "modernise-approach", "qa-migrations_led"]) assert(ids.includes(want), want + " missing: " + ids);
+});
 await test("agentic AI section is indexed", () => {
   for (const id of ["agentic-overview", "agentic-agents", "agentic-guardrails"]) assert(chunks.some((c) => c.id === id), id);
 });

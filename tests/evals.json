@@ -26,5 +26,9 @@
   { "q": "Have you used a vector database like pgvector?", "expect": ["familiarity-ai", "project-0"] },
   { "q": "Have you worked with AWS Bedrock or Vertex AI?", "expect": ["familiarity-ai"] },
   { "q": "How do you evaluate LLM or RAG quality?", "expect": ["familiarity-ai", "project-0", "agentic-"] },
-  { "q": "Do you know GCP?", "expect": ["familiarity-infra"] }
+  { "q": "Do you know GCP?", "expect": ["familiarity-infra"] },
+  { "q": "How did you move the PHP application to Node.js?", "expect": ["modernise-"] },
+  { "q": "Have you used the strangler pattern?", "expect": ["modernise-"] },
+  { "q": "How did you handle login and JWT during the rewrite?", "expect": ["modernise-"] },
+  { "q": "Tell me about migrating to Angular", "expect": ["modernise-", "exp-1"] }
 ]

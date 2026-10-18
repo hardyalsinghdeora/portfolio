@@ -282,6 +282,7 @@ export const PROFILE = {
         "Built the order and subscription data model the commercial platform still runs on — SKU catalogue, contract-term and proration derivation, invoicing and effective-count derivation.",
         "Led sprint planning, backlog grooming and stakeholder communication across ~30 recorded sprints; published annual build-and-release plans; tracked sprint overspill.",
         "Established code review as the team's primary quality and teaching surface; designed 30- and 90-day onboarding plans; ran 1:1s.",
+        "Designed and led a strangler migration of a live PHP/MySQL application to Node.js APIs on PostgreSQL with an Angular UI: shared login (PHP session plus JWT, single logout), page-by-page moves, dual data layers keeping both databases current during a parallel run, then retired the legacy app with no user-visible interruption.",
         "Ran a PHP 5.3 → 7.3 migration moving the full user base off deprecated servers; reworked CI/CD on Bitbucket Pipelines, cutting deployment time.",
         "Shipped a versioned partner CRM integration with published API docs; delivered a tenth regional language with offline distribution, automated user transfer, annual class upgrade and credential revocation in the sync mechanism.",
         "Guided engineers through design review and technical specification writing; owned stakeholder communication across product and engineering."
@@ -411,6 +412,27 @@ export const PROFILE = {
       "Enforce idempotency in the data",
       "Treat reconciliation as part of the mechanism"
     ]
+  },
+  "modernisation_case_study": {
+    "title": "Replacing a live PHP application with Node.js and Angular, without users noticing",
+    "url": "https://github.com/hardyalsinghdeora/portfolio/blob/main/docs/case-study-php-to-node-strangler.md",
+    "role": "Designed and led it, as Lead Software Engineer (2020-2024). A separate project from the MySQL-to-PostgreSQL commerce migration.",
+    "context": "A live web application ran on PHP with MySQL, with login and sessions in PHP. Goal: move it to Node.js APIs on PostgreSQL with an Angular front end and retire the PHP application, with users able to keep working and not notice the migration.",
+    "approach": [
+      "Strangler pattern: the new application grew around the old one page by page until nothing was left to switch off",
+      "Shared login: login stayed in PHP and MySQL; at login the system also issued a JWT for the migrated Node.js/PostgreSQL application; logout destroyed both the PHP session and the JWT, so users always saw one application and one session",
+      "Pages behind the login moved onto Node.js APIs one at a time, invisibly to users",
+      "Dual data layers: a PostgreSQL data layer added to the legacy PHP code and a MySQL data layer added to the new Node.js APIs, so both databases stayed current and both applications ran in parallel on live traffic",
+      "Angular UI built only once every operation ran through the Node.js APIs, so the UI was built once against the final APIs",
+      "Legacy feature freeze: all new enhancements went into Node.js and Angular only, which kept the migration finite",
+      "Legacy PHP application retired once all traffic and features were on the new stack"
+    ],
+    "trade_offs": [
+      "Dual data layers in application code rely on every write path being covered; acceptable for a bounded parallel run",
+      "Coupled logout must tear down both session mechanisms every time"
+    ],
+    "outcome": "Moved from PHP/MySQL to Node.js, Angular and PostgreSQL with no user-visible interruption; the legacy PHP application is fully retired.",
+    "patterns": ["Strangler fig", "Session/token bridging (PHP session + JWT)", "Parallel run", "Dual data layers", "Legacy feature freeze", "APIs before UI"]
   },
   "current_focus_2026": [
     "Made the commercial platform the single system of record for client, order, payment and subscription; drove cross-team consolidation of scattered endpoints into one versioned service",

@@ -20,6 +20,11 @@ const SYNONYMS = {
   remote: ["remote", "hybrid", "work_mode"],
   postgres: ["postgresql"],
   db: ["database", "postgresql", "mysql"],
+  strangler: ["strangler", "parallel", "legacy"],
+  rewrite: ["strangler", "legacy", "modernisation"],
+  modernisation: ["strangler", "legacy"],
+  modernization: ["strangler", "legacy", "modernisation"],
+  nodejs: ["node", "node.js"],
   now: ["current", "focus", "2026"],
   currently: ["current", "focus", "2026"],
   k8s: ["kubernetes"],
@@ -114,6 +119,14 @@ export function buildChunks(p) {
     add("migration-results", "Migration case study: numbers and lessons", "migration_case_study",
       Object.entries(m.numbers || {}).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n") +
       `\nLesson: ${m.lesson}\nWould do differently:\n${list(m.would_do_differently)}\nPrinciples:\n${list(m.principles)}`);
+  }
+
+  const mo = p.modernisation_case_study;
+  if (mo) {
+    add("modernise-context", "Case study: PHP to Node.js and Angular strangler migration", "modernisation_case_study",
+      `${mo.title}\nRole: ${mo.role}\n${mo.context}\nOutcome: ${mo.outcome}\nPatterns: ${(mo.patterns || []).join(", ")}\nURL: ${mo.url}`);
+    add("modernise-approach", "Case study: PHP to Node.js migration, approach and trade-offs", "modernisation_case_study",
+      `${list(mo.approach)}\nTrade-offs:\n${list(mo.trade_offs)}`);
   }
 
   const ag = p.agentic_ai;

@@ -79,6 +79,12 @@ await test("profile chunks into small, unique, titled passages", () => {
     assert(!/undefined/.test(c.text), "undefined leaked into chunk " + c.id);
   }
 });
+await test("working-familiarity items are indexed and labelled as not production", () => {
+  const fam = chunks.filter((c) => c.section === "working_familiarity");
+  eq(fam.length, 2);
+  for (const c of fam) assert(/not production/i.test(c.title), c.title);
+  assert(!chunks.some((c) => c.section === "skills" && /kubernetes|kafka|langgraph/i.test(c.text)), "familiarity item leaked into production skills");
+});
 await test("agentic AI section is indexed", () => {
   for (const id of ["agentic-overview", "agentic-agents", "agentic-guardrails"]) assert(chunks.some((c) => c.id === id), id);
 });

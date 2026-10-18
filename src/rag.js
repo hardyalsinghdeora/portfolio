@@ -20,7 +20,20 @@ const SYNONYMS = {
   remote: ["remote", "hybrid", "work_mode"],
   postgres: ["postgresql"],
   db: ["database", "postgresql", "mysql"],
+  now: ["current", "focus", "2026"],
+  currently: ["current", "focus", "2026"],
   k8s: ["kubernetes"],
+  gcp: ["google", "cloud"],
+  langgraph: ["langchain", "langgraph"],
+  langchain: ["langchain", "langgraph"],
+  vector: ["vector", "pgvector", "embeddings"],
+  pinecone: ["vector", "pgvector"],
+  bedrock: ["bedrock", "vertex"],
+  vertex: ["bedrock", "vertex"],
+  eval: ["evaluation", "eval", "ragas"],
+  evals: ["evaluation", "eval", "ragas"],
+  container: ["docker", "kubernetes"],
+  containers: ["docker", "kubernetes"],
   mcp: ["mcp", "model", "context", "protocol"],
   team: ["team", "squad", "engineers", "lead"],
   manage: ["lead", "squad", "mentoring", "leadership"],
@@ -75,6 +88,13 @@ export function buildChunks(p) {
 
   for (const [k, v] of Object.entries(p.skills || {})) {
     add("skills-" + k, "Skills: " + k.replace(/_/g, " "), "skills", (v || []).join(", "));
+  }
+  const wf = p.working_familiarity;
+  if (wf) {
+    add("familiarity-infra", "Working familiarity (not production): infrastructure", "working_familiarity",
+      `${wf.meaning}\n${list(wf.infrastructure)}`);
+    add("familiarity-ai", "Working familiarity (not production): AI stack", "working_familiarity",
+      `${wf.meaning}\n${list(wf.ai_stack)}`);
   }
   add("architecture-defaults", "Architectural defaults", "architectural_defaults", list(p.architectural_defaults));
 

@@ -18,5 +18,13 @@
   { "q": "What certifications do you have?", "expect": ["education"] },
   { "q": "What roles are you looking for?", "expect": ["targeting", "qa-role_preference"] },
   { "q": "What are you working on right now?", "expect": ["current-focus"] },
-  { "q": "Have you worked on voice agents?", "expect": ["agentic-guardrails", "skills-ai_automation", "current-focus"] }
+  { "q": "Have you worked on voice agents?", "expect": ["agentic-guardrails", "skills-ai_automation", "current-focus"] },
+  { "q": "Do you know Kubernetes?", "expect": ["familiarity-infra"] },
+  { "q": "Have you used Docker?", "expect": ["skills-cloud_delivery"] },
+  { "q": "Any experience with Kafka?", "expect": ["familiarity-infra"] },
+  { "q": "Do you know LangGraph?", "expect": ["familiarity-ai"] },
+  { "q": "Have you used a vector database like pgvector?", "expect": ["familiarity-ai", "project-0"] },
+  { "q": "Have you worked with AWS Bedrock or Vertex AI?", "expect": ["familiarity-ai"] },
+  { "q": "How do you evaluate LLM or RAG quality?", "expect": ["familiarity-ai", "project-0", "agentic-"] },
+  { "q": "Do you know GCP?", "expect": ["familiarity-infra"] }
 ]

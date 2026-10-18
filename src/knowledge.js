@@ -230,6 +230,20 @@ export const PROFILE = {
       "Monthly leadership reporting"
     ]
   },
+  "working_familiarity": {
+    "meaning": "Technologies I know at a working level from courses, side projects and reading real configurations, but have not run in production. I am upfront about the difference.",
+    "infrastructure": [
+      "Kubernetes: pods, deployments, services and kubectl basics; production containers so far have been Docker",
+      "Google Cloud (GCP): core services at a working level; production cloud work has been on AWS and Azure",
+      "Kafka / event streaming: topics, partitions, consumer groups; production event-driven work has used AWS SQS queues"
+    ],
+    "ai_stack": [
+      "LangChain / LangGraph: built small apps with them; production agents so far are hand-rolled tool-calling loops (MCP, Gemini function calling)",
+      "Vector databases (pgvector, Pinecone, Chroma): working level; the portfolio agent uses in-memory vectors because ~50 chunks don't need a database",
+      "AWS Bedrock / Google Vertex AI: called models through both; production LLM calls so far go to provider APIs directly (Gemini, Claude, OpenAI realtime)",
+      "LLM evaluation (LLM-as-judge, RAGAS-style metrics): working level; the portfolio ships a retrieval eval set measuring hit@1 and hit@5"
+    ]
+  },
   "architectural_defaults": [
     "One database per service; aggregator reads others' DBs but writes only its own",
     "No cross-DB foreign keys — validate at application layer",
@@ -428,7 +442,7 @@ export const PROFILE = {
       "Human-in-the-loop review of agent output",
       "Guardrails: least privilege, read-only defaults, secrets kept out of the model context"
     ],
-    "not_yet_in_record": "No production use yet of AWS Bedrock, Vertex AI, LangChain/LangGraph or a managed vector database; say so plainly if asked, and point to the hybrid RAG in this portfolio as the closest hands-on work."
+    "not_yet_in_record": "AWS Bedrock, Vertex AI, LangChain/LangGraph, vector databases and LLM evaluation frameworks are at working-familiarity level (see working_familiarity), not production. The closest production-grade work is the hybrid RAG and tool-calling agent in this portfolio, which implements retrieval, rank fusion, a bounded agent loop and a retrieval eval set from first principles."
   },
   "projects": [
     {

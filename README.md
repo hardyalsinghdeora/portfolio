@@ -63,7 +63,8 @@ src/worker.js            HTTP routing, validation, rate limiting, response forma
 src/knowledge.js         generated from profile.json by the build
 public/                  the page (index.html) and the Agentic AI Architect résumé
 tests/index.html         zero-dependency test page: unit tests + agent-loop tests with a mocked Gemini
-tests/evals.json         retrieval eval set (20 recruiter questions → expected chunks)
+tests/evals.json         retrieval eval set (28 recruiter questions → expected chunks)
+.github/workflows/       deploys dist/ to Cloudflare Pages on every push to main
 scripts/build.ps1        builds dist/ and bundles src/ into one dist/_worker.js
 scripts/dev-server.ps1   local static server with a mocked /api/ask for UI checks
 dist/                    deployable output (committed so the repo deploys as-is)
@@ -78,15 +79,23 @@ powershell -ExecutionPolicy Bypass -File scripts/dev-server.ps1
 
 Then open `http://localhost:8787/tests/`. It runs the real modules against a mocked Gemini API, with no key and no network:
 
-- **20/20 tests passing:** chunking, BM25, synonym expansion, RRF, hybrid search, embedding cache, BM25 fallback, the agent loop (tool calls, thought-signature echo, step bounds, unknown tools, hidden thoughts), and Worker guards (405/400/403/429/503).
-- **Retrieval eval (BM25 only, the worst case):** hit@5 = 20/20, hit@1 = 17/20.
+- **21/21 tests passing:** chunking, BM25, synonym expansion, RRF, hybrid search, embedding cache, BM25 fallback, the agent loop (tool calls, thought-signature echo, step bounds, unknown tools, hidden thoughts), Worker guards (405/400/403/429/503), and a check that working-familiarity skills never leak into production skills.
+- **Retrieval eval (BM25 only, the worst case):** hit@5 = 28/28, hit@1 = 22/28.
+
+## Honest skill levels
+
+The profile separates **production skills** from **working familiarity**: things I know from courses and side projects, such as Kubernetes, Kafka, LangGraph, vector databases, Bedrock/Vertex AI and LLM evals. The agent is told to answer at the level the profile states and never upgrade familiarity to production. A test enforces that the two lists stay apart.
 
 ## Deploy
 
 The live site is a Cloudflare Pages project in advanced mode, using `_worker.js`.
 
+**Automatic:** every push to `main` runs `.github/workflows/deploy.yml`, which deploys `dist/` with wrangler. It needs two repository secrets: `CLOUDFLARE_API_TOKEN` (with the Cloudflare Pages: Edit permission) and `CLOUDFLARE_ACCOUNT_ID`.
+
+**Manual:**
+
 1. Run `scripts/build.ps1`.
-2. Either drag the `dist/` folder into **Pages → Create deployment**, or run `npx wrangler pages deploy dist`.
+2. Either drag the `dist/` folder into **Pages → Create deployment** (Environment: Production), or run `npx wrangler pages deploy dist`.
 3. Under **Settings → Variables and Secrets**, add the secret `GEMINI_API_KEY`.
    - Optional: `GEMINI_MODEL`, `GEMINI_EMBED_MODEL` and `RAG_EMBEDDINGS=off`.
    - Optional KV binding `RATE_KV`, for rate limiting and the embedding cache.

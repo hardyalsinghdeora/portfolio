@@ -49,7 +49,9 @@ Constraints: Cloudflare Pages free tier, deployment by dashboard drag-and-drop (
 
 ## Evaluation
 
-`tests/evals.json` holds 20 questions recruiters actually ask, each with the chunks that should answer it. On BM25 alone, the worst case, the result is **hit@5 = 20/20** and **hit@1 = 17/20**. The browser test page runs the eval on every build.
+`tests/evals.json` holds 28 questions recruiters actually ask, including "do you know Kubernetes / LangGraph / Bedrock?", each with the chunks that should answer it. On BM25 alone, the worst case, the result is **hit@5 = 28/28** and **hit@1 = 22/28**.
+
+Adding the working-familiarity chunks first regressed one question ("What are you working on right now?" matched the word "working"). The eval caught it, and a synonym for "now" / "currently" fixed it. That's the reason to keep the eval in the build. The browser test page runs the eval on every build.
 
 Next:
 - add an LLM-as-judge pass on answer faithfulness;

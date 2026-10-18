@@ -125,6 +125,9 @@ export function buildChunks(p) {
   if (mo) {
     add("modernise-context", "Case study: PHP to Node.js and Angular strangler migration", "case_studies",
       `${mo.title}\nRole: ${mo.role}\n${mo.context}\nOutcome: ${mo.outcome}\nPatterns: ${(mo.patterns || []).join(", ")}\nURL: ${mo.url}`);
+    add("modernise-why", "Case study: PHP to Node.js migration, numbers and why not a one-time database move", "case_studies",
+      Object.entries(mo.numbers || {}).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n") +
+      `\nWhy not migrate the database once: ${mo.why_not_a_one_time_database_migration || ""}`);
     add("modernise-approach", "Case study: PHP to Node.js migration, approach and trade-offs", "case_studies",
       `${list(mo.approach)}\nTrade-offs:\n${list(mo.trade_offs)}`);
   }

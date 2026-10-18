@@ -285,7 +285,7 @@ const PROFILE = {
         "Built the order and subscription data model the commercial platform still runs on — SKU catalogue, contract-term and proration derivation, invoicing and effective-count derivation.",
         "Led sprint planning, backlog grooming and stakeholder communication across ~30 recorded sprints; published annual build-and-release plans; tracked sprint overspill.",
         "Established code review as the team's primary quality and teaching surface; designed 30- and 90-day onboarding plans; ran 1:1s.",
-        "Designed and led a strangler migration of a live PHP/MySQL application to Node.js APIs on PostgreSQL with an Angular UI: shared login (PHP session plus JWT, single logout), page-by-page moves, dual data layers keeping both databases current during a parallel run, then retired the legacy app with no user-visible interruption.",
+        "Designed and led a strangler migration of a live PHP/MySQL application to Node.js microservices on PostgreSQL with an Angular UI: 70 pages across 12 modules in 3 months with 2 developers. Shared login (PHP session plus JWT), per-module MySQL write flags so both databases stayed current, no user-visible interruption; legacy PHP app retired.",
         "Ran a PHP 5.3 → 7.3 migration moving the full user base off deprecated servers; reworked CI/CD on Bitbucket Pipelines, cutting deployment time.",
         "Shipped a versioned partner CRM integration with published API docs; delivered a tenth regional language with offline distribution, automated user transfer, annual class upgrade and credential revocation in the sync mechanism.",
         "Guided engineers through design review and technical specification writing; owned stakeholder communication across product and engineering."
@@ -417,25 +417,32 @@ const PROFILE = {
     ]
   },
   "modernisation_case_study": {
-    "title": "Replacing a live PHP application with Node.js and Angular, without users noticing",
+    "title": "Replacing a live PHP application with Node.js microservices and Angular, without users noticing",
     "url": "https://github.com/hardyalsinghdeora/portfolio/blob/main/docs/case-study-php-to-node-strangler.md",
-    "role": "Designed and led it, as Lead Software Engineer (2020-2024). A separate project from the MySQL-to-PostgreSQL commerce migration.",
-    "context": "A live web application ran on PHP with MySQL, with login and sessions in PHP. Goal: move it to Node.js APIs on PostgreSQL with an Angular front end and retire the PHP application, with users able to keep working and not notice the migration.",
+    "role": "Designed and led it, as Lead Software Engineer (2020-2024), with a team of 2 developers. A separate project from the later MySQL-to-PostgreSQL commerce migration.",
+    "numbers": {
+      "pages_migrated": 70,
+      "modules": 12,
+      "duration": "3 months from start to the legacy PHP application being retired",
+      "team": "2 developers, led by me",
+      "user_visible_interruption": "none"
+    },
+    "context": "The school-facing application ran on PHP with MySQL, with login and sessions in PHP. It had to move to a microservice architecture on Node.js and PostgreSQL with an Angular front end, and the PHP application had to be retired, without schools noticing.",
+    "why_not_a_one_time_database_migration": "The MySQL database this application writes to is the centre of every product sold to schools. Moving its data off MySQL in one go would have forced every other product to migrate at the same time, which was not possible. So the design supported both databases and both applications at once: the application moved platform by platform while MySQL stayed complete and current for everything else.",
     "approach": [
-      "Strangler pattern: the new application grew around the old one page by page until nothing was left to switch off",
-      "Shared login: login stayed in PHP and MySQL; at login the system also issued a JWT for the migrated Node.js/PostgreSQL application; logout destroyed both the PHP session and the JWT, so users always saw one application and one session",
-      "Pages behind the login moved onto Node.js APIs one at a time, invisibly to users",
-      "Dual data layers: a PostgreSQL data layer added to the legacy PHP code and a MySQL data layer added to the new Node.js APIs, so both databases stayed current and both applications ran in parallel on live traffic",
-      "Angular UI built only once every operation ran through the Node.js APIs, so the UI was built once against the final APIs",
-      "Legacy feature freeze: all new enhancements went into Node.js and Angular only, which kept the migration finite",
-      "Legacy PHP application retired once all traffic and features were on the new stack"
+      "APIs first: microservice APIs on Node.js and PostgreSQL were built for all 12 modules up front, and the live PHP application called them after every event, so PostgreSQL stayed current from day one while users kept using PHP",
+      "Per-module MySQL flag: every API has a MySQL data layer behind an enable/disable flag per module. Off while a module still runs in PHP (PHP writes MySQL itself); on once the module moves to Node.js, so the API writes MySQL and every product reading MySQL keeps working. Moving a module meant flipping a flag, not running a data migration",
+      "Shared login: login stayed in PHP and MySQL; at login the system also issued a JWT for the migrated application; logout destroyed both the PHP session and the JWT, so users always saw one application and one session",
+      "Pages moved to Node.js APIs and Angular one module at a time; the Angular UI deliberately kept the existing look so users noticed nothing, while gaining central updates through shared components",
+      "New enhancements went only into Node.js and Angular, never PHP, which kept the migration finite",
+      "With all 12 modules moved, the MySQL flag is on for every module and the PHP application was retired; the flags stay on until every product that reads MySQL has moved to PostgreSQL"
     ],
     "trade_offs": [
-      "Dual data layers in application code rely on every write path being covered; acceptable for a bounded parallel run",
+      "Writes to two databases from application code rely on every write path being covered, by PHP for modules still in PHP or by the API's MySQL layer once the flag is on; acceptable because MySQL must stay current anyway while other products depend on it",
       "Coupled logout must tear down both session mechanisms every time"
     ],
-    "outcome": "Moved from PHP/MySQL to Node.js, Angular and PostgreSQL with no user-visible interruption; the legacy PHP application is fully retired.",
-    "patterns": ["Strangler fig", "Session/token bridging (PHP session + JWT)", "Parallel run", "Dual data layers", "Legacy feature freeze", "APIs before UI"]
+    "outcome": "70 pages across 12 modules moved from PHP/MySQL to Node.js microservices, PostgreSQL and Angular in 3 months with 2 developers led by me; no user-visible interruption; the legacy PHP application is fully retired, and MySQL stays current through the per-module flags until the remaining products move to PostgreSQL.",
+    "patterns": ["Strangler fig", "Microservices", "Feature flags per module", "Session/token bridging (PHP session + JWT)", "Parallel run on two databases", "APIs before UI", "Legacy feature freeze"]
   },
   "current_focus_2026": [
     "Made the commercial platform the single system of record for client, order, payment and subscription; drove cross-team consolidation of scattered endpoints into one versioned service",
@@ -572,7 +579,7 @@ const PROFILE = {
     "location_preference": "Ahmedabad-based; open to remote or hybrid, on-site in Pune, Bengaluru or Hyderabad, or relocation anywhere in India.",
     "role_preference": "Principal / Staff Engineer, Software Architect or Engineering Manager; backend/platform, commerce/billing or data-model-heavy domains.",
     "core_stack": "TypeScript/Node.js, PostgreSQL, microservices behind an API gateway, AWS; Angular on the front end; MCP/LLM tooling.",
-    "migrations_led": "Three migrations, all with users working throughout: (1) as Principal, directed the live MySQL→PostgreSQL migration of a B2B commerce platform across six product lines with no maintenance window and zero customer-visible incidents; (2) as Lead, designed and led a strangler migration of a live PHP/MySQL application to Node.js APIs on PostgreSQL with an Angular UI, using a shared PHP-session + JWT login and dual data layers, then retired the legacy app with no user-visible interruption; (3) as Lead, moved a legacy product's full user base from PHP 5.3 to PHP 7.3 and decommissioned the old servers.",
+    "migrations_led": "Three migrations, all with users working throughout: (1) as Principal, directed the live MySQL→PostgreSQL migration of a B2B commerce platform across six product lines with no maintenance window and zero customer-visible incidents; (2) as Lead, designed and led a strangler migration of a live PHP/MySQL application to Node.js microservices on PostgreSQL with an Angular UI (70 pages, 12 modules, 3 months, 2 developers), using a shared PHP-session + JWT login and per-module MySQL write flags, then retired the legacy app with no user-visible interruption; (3) as Lead, moved a legacy product's full user base from PHP 5.3 to PHP 7.3 and decommissioned the old servers.",
     "biggest_achievement": "Directed a no-downtime MySQL→PostgreSQL migration across six product lines in under six months: 500k+ records backfilled, ~30 legacy tables consolidated into 4, zero customer-visible incidents, from a 25k-word spec other engineers executed.",
     "team_size_led": "Squad lead for 4; guide ~10 engineers across teams; ~6 years in lead roles.",
     "links": "LinkedIn: linkedin.com/in/hardyalsinghdeora · GitHub: github.com/hardyalsinghdeora · Email: hardyalsinghdeora@gmail.com"
@@ -707,6 +714,9 @@ function buildChunks(p) {
   if (mo) {
     add("modernise-context", "Case study: PHP to Node.js and Angular strangler migration", "case_studies",
       `${mo.title}\nRole: ${mo.role}\n${mo.context}\nOutcome: ${mo.outcome}\nPatterns: ${(mo.patterns || []).join(", ")}\nURL: ${mo.url}`);
+    add("modernise-why", "Case study: PHP to Node.js migration, numbers and why not a one-time database move", "case_studies",
+      Object.entries(mo.numbers || {}).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n") +
+      `\nWhy not migrate the database once: ${mo.why_not_a_one_time_database_migration || ""}`);
     add("modernise-approach", "Case study: PHP to Node.js migration, approach and trade-offs", "case_studies",
       `${list(mo.approach)}\nTrade-offs:\n${list(mo.trade_offs)}`);
   }

@@ -31,5 +31,8 @@
   { "q": "Have you used the strangler pattern?", "expect": ["modernise-"] },
   { "q": "How did you handle login and JWT during the rewrite?", "expect": ["modernise-"] },
   { "q": "Tell me about migrating to Angular", "expect": ["modernise-", "exp-1"] },
-  { "q": "What migrations have you led?", "expect": ["qa-migrations_led"] }
+  { "q": "What migrations have you led?", "expect": ["qa-migrations_led"] },
+  { "q": "How long did the PHP to Node.js migration take and how big was the team?", "expect": ["modernise-"] },
+  { "q": "Why didn't you just migrate the database once?", "expect": ["modernise-why"] },
+  { "q": "How did you use feature flags in a migration?", "expect": ["modernise-"] }
 ]

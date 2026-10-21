@@ -1129,7 +1129,7 @@ async function runAgent({ turns, index, profile, env, fetchImpl = fetch }) {
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
 // Optional: GEMINI_MODEL, GEMINI_EMBED_MODEL, RAG_EMBEDDINGS=off (BM25 only),
-//           RATE_KV (KV binding: per-IP hourly limit and an embedding cache)
+//           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts)
 //
 // Response format of /api/ask: the answer as plain text, then the record separator U+001E,
 // then a JSON object { sources, steps, retrieval }. Older pages simply show the text part.
@@ -1139,6 +1139,11 @@ const MAX_TURNS = 10;          // matches the page, which keeps the last 10 turn
 const MAX_CHARS = 1000;        // per message
 const HOURLY_LIMIT = 30;       // questions per IP per hour, only when RATE_KV is bound
 const SEP = "\u001e";
+
+// Sources counted from ?ref= links (docs/listings.md hands these out). Anything else is ignored,
+// so a crafted ref can't create KV keys or spend the daily write budget.
+const SOURCES = ["linkedin", "naukri", "github", "resume", "email"];
+const BOT = /bot|crawl|spider|preview|facebookexternalhit|slack|whatsapp|telegram|discord|embedly|curl|wget|python-requests/i;
 
 let INDEX = null;
 function getIndex() {
@@ -1174,6 +1179,7 @@ async function handle(request, env, fetchImpl) {
     console.error("api crashed", err && err.message);
     return json(500, { error: "server" });
   }
+  if (request.method === "GET" && url.pathname === "/") await countSource(env, request, "visit", url.searchParams.get("ref"));
   return env.ASSETS.fetch(request);
 }
 
@@ -1195,6 +1201,7 @@ async function ask(request, env, fetchImpl) {
     // Free-tier quota exhaustion comes back as 429; the page shows its "busy" note.
     return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });
   }
+  await countSource(env, request, "ask", body.ref);
   const meta = { sources: result.sources, steps: result.steps, retrieval: result.retrieval };
   return new Response(result.text + SEP + JSON.stringify(meta), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
@@ -1246,6 +1253,21 @@ async function underLimit(kv, request) {
     console.warn("rate limit unavailable, allowing request:", err && err.message);
   }
   return true;
+}
+
+// Monthly counters per source, e.g. "ref:visit:linkedin:2026-10" -> "17". Read them in the KV
+// namespace in the Cloudflare dashboard. A lost increment under concurrency is fine at this scale.
+// Fails open like the rate limit: counting must never break the page.
+async function countSource(env, request, kind, ref) {
+  if (!env.RATE_KV || !SOURCES.includes(ref)) return;
+  if (BOT.test(request.headers.get("user-agent") || "")) return;
+  const key = `ref:${kind}:${ref}:${new Date().toISOString().slice(0, 7)}`;
+  try {
+    const n = parseInt((await env.RATE_KV.get(key)) || "0", 10);
+    await env.RATE_KV.put(key, String(n + 1));
+  } catch (err) {
+    console.warn("source count failed:", err && err.message);
+  }
 }
 
 function json(status, data) {

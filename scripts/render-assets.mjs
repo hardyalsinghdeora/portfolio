@@ -1,10 +1,12 @@
-// Renders the link-preview card (public/og-image.png, 1200x630) and the home-screen icon
-// (public/apple-touch-icon.png, 180x180) in headless Chromium. Run after changing the headline:
-//   node scripts/og-image.mjs
-// The PNGs are committed, so the build and the deploy never need a browser.
+// Renders the committed assets that need a browser, in headless Chromium:
+//   public/og-image.png            link-preview card, 1200x630
+//   public/apple-touch-icon.png    home-screen icon, 180x180
+//   public/resume-agentic-ai.pdf   the résumé page printed to A4, for Naukri and LinkedIn uploads
+// Run after changing the headline or the résumé:  node scripts/render-assets.mjs
+// The outputs are committed, so the build and the deploy never need a browser.
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,7 +46,9 @@ try {
   await page.setViewportSize({ width: 180, height: 180 });
   await page.setContent(icon);
   await page.screenshot({ path: join(root, "public/apple-touch-icon.png") });
-  console.log("wrote public/og-image.png and public/apple-touch-icon.png");
+  await page.goto(pathToFileURL(join(root, "public/resume-agentic-ai.html")).href);
+  await page.pdf({ path: join(root, "public/resume-agentic-ai.pdf"), format: "A4", preferCSSPageSize: true, printBackground: false });
+  console.log("wrote public/og-image.png, public/apple-touch-icon.png and public/resume-agentic-ai.pdf");
 } finally {
   await browser.close();
 }

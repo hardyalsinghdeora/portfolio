@@ -30,6 +30,7 @@ import { PROFILE } from "../src/knowledge.js";
 import { buildChunks, buildIndex, bm25, search, rrf, tokenize } from "../src/rag.js";
 import { runAgent, MAX_STEPS } from "../src/agent.js";
 import { handle, validTurns, SEP } from "../src/worker.js";
+import { buildListings, listingsMarkdown, LIMITS } from "../scripts/listings.mjs";
 
 const out = document.getElementById("out");
 const results = [];
@@ -100,9 +101,9 @@ await test("no phone number anywhere in the public knowledge base", () => {
 // Employer-internal vocabulary and company numbers that may be said in an interview but never
 // published (career-profile redlines.json and the verbal-only rows of the master résumé).
 const REDLINES = /\b(Mindspark|Naandi|Shiksha|SchoolSite|School Site|Navigator|da_orderMaster|common_user_details|educatio_educat|ei-order|navigator-aggregator|ei-navigator-ui|ei-mcp-gateway|Zoho)\b|\b(ASSET|CARES|SZM|NSH)\b|\bNAV-\d|500k|500,000|577|1,689,499|363,609|₹\s?\d|\bcr(ore)?\b/;
-await test("no redlined names or verbal-only numbers in the knowledge base or public pages", async () => {
+await test("no redlined names or verbal-only numbers in the knowledge base, public pages or job-site text", async () => {
   const pages = await Promise.all(["../public/index.html", "../public/resume-agentic-ai.html"].map((u) => fetch(u).then((r) => r.text())));
-  for (const [name, text] of [["profile", JSON.stringify(PROFILE)], ["index.html", pages[0]], ["resume-agentic-ai.html", pages[1]]]) {
+  for (const [name, text] of [["profile", JSON.stringify(PROFILE)], ["index.html", pages[0]], ["resume-agentic-ai.html", pages[1]], ["listings", listingsMarkdown(PROFILE)]]) {
     const m = text.match(REDLINES);
     assert(!m, `redline "${m && m[0]}" in ${name}`);
   }
@@ -271,6 +272,41 @@ await test("worker: rate limit counts per IP, and a failing KV store lets reques
   eq((await handle(post({ messages: turns }, ip), { ...E, RATE_KV: full }, answer())).status, 200, "write limit");
   const down = { get: async () => { throw new Error("KV unavailable"); }, put: async () => {} };
   eq((await handle(post({ messages: turns }, ip), { ...E, RATE_KV: down }, answer())).status, 200, "read failure");
+});
+await test("worker: ?ref= links count visits and questions per source, and nothing else", async () => {
+  const answer = () => mockGemini({ script: [
+    [{ functionCall: { name: "search_profile", args: { query: "agents" } } }],
+    [{ text: "Bounded agents." }],
+  ] });
+  const store = new Map();
+  const kv = { get: async (k) => store.get(k) ?? null, put: async (k, v) => { store.set(k, v); } };
+  const E = { ...env, ASSETS: assets, RATE_KV: kv };
+  const month = new Date().toISOString().slice(0, 7);
+  const browser = { "user-agent": "Mozilla/5.0 Chrome/141" };
+  eq(await (await handle(req("/?ref=linkedin", { headers: browser }), E, answer())).text(), "static");
+  await handle(req("/?ref=linkedin", { headers: browser }), E, answer());
+  eq(store.get(`ref:visit:linkedin:${month}`), "2");
+  // Browsers drop a user-agent set on Request objects, so use a request-like object here.
+  const bot = { url: "https://hardyalsinghdeora.pages.dev/?ref=linkedin", method: "GET", headers: new Headers({ "user-agent": "LinkedInBot/1.0" }) };
+  await handle(bot, E, answer());
+  await handle(req("/?ref=anything-else", { headers: browser }), E, answer());
+  await handle(req("/resume-agentic-ai.html?ref=naukri", { headers: browser }), E, answer());
+  eq(store.get(`ref:visit:linkedin:${month}`), "2", "bot not counted");
+  eq([...store.keys()].filter((k) => k.startsWith("ref:")).length, 1, "unknown source and other paths not counted");
+  eq((await handle(post({ messages: turns, ref: "naukri" }, browser), E, answer())).status, 200);
+  eq(store.get(`ref:ask:naukri:${month}`), "1");
+  const down = { get: async () => { throw new Error("KV unavailable"); }, put: async () => {} };
+  eq(await (await handle(req("/?ref=linkedin", { headers: browser }), { ...E, RATE_KV: down }, answer())).text(), "static", "KV failure");
+});
+await test("job-site text fits every limit and only names skills the profile evidences", () => {
+  const l = buildListings(PROFILE);
+  eq(l.over.length, 0, l.over.join("; "));
+  for (const [k, n] of Object.entries(LIMITS)) assert(l.fields[k] && l.fields[k].length <= n, k);
+  assert(l.skills.includes("Model Context Protocol (MCP)") && l.skills.includes("PostgreSQL"), "core skills present");
+  assert(!l.skills.includes("Kubernetes") && !l.skills.includes("LangGraph"), "working-familiarity skills stay out");
+  assert(l.fields.linkedin_about.includes("?ref=linkedin") && l.links.naukri.endsWith("?ref=naukri"), "tracked links");
+  assert(!/this portfolio/.test(l.fields.linkedin_about + l.fields.naukri_summary), "page-only wording");
+  assert(l.openToWorkTitles.length <= 5);
 });
 await test("worker: /api/search returns ranked passages without calling the LLM", async () => {
   const calls = [];

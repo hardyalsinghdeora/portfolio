@@ -55,7 +55,22 @@ The mic button in the composer lets visitors ask by voice. It uses only what the
 
 ## Link previews and search
 
-`public/` carries Open Graph and Twitter card tags, a `Person` JSON-LD block, a `<noscript>` summary for crawlers, `robots.txt`, `sitemap.xml` and a favicon. `node scripts/og-image.mjs` re-renders the preview card (`og-image.png`) and `apple-touch-icon.png` from `knowledge/profile.json`. Run it after changing the headline; the PNGs are committed.
+`public/` carries Open Graph and Twitter card tags, a `Person` JSON-LD block, a `<noscript>` summary for crawlers, `robots.txt`, `sitemap.xml` and a favicon. `node scripts/render-assets.mjs` re-renders the preview card (`og-image.png`) and `apple-touch-icon.png` from `knowledge/profile.json`, and prints the résumé page to `resume-agentic-ai.pdf`. Run it after changing the headline or the résumé; the outputs are committed.
+
+## LinkedIn and Naukri text
+
+Every build writes [docs/listings.md](docs/listings.md) from `knowledge/profile.json`: LinkedIn headline and About, the skills missing from LinkedIn, Open to Work titles, and the Naukri resume headline, profile summary and key skills, each with its character count. The build fails if a field goes over the site's limit, and a test keeps the skill list to skills the profile actually evidences and runs the text through the redline check. Edit the profile, run `npm test`, and paste from the regenerated file.
+
+## Visit sources
+
+Links handed out in `docs/listings.md` carry `?ref=linkedin` or `?ref=naukri` (also accepted: `github`, `resume`, `email`). When `RATE_KV` is bound, the Worker keeps monthly counters in it:
+
+- `ref:visit:<source>:<YYYY-MM>`: landings on `/` with that tag;
+- `ref:ask:<source>:<YYYY-MM>`: questions asked during those visits.
+
+Read them in the KV namespace in the Cloudflare dashboard. Unknown sources and bot user agents (LinkedIn's and Slack's link-preview fetchers among them) aren't counted, and counting fails open so it can never break the page. The page drops `?ref=` from the address bar on load, so a copied URL doesn't inflate the count. Without `RATE_KV` nothing is counted.
+
+For overall traffic and referrers, turn on Cloudflare Web Analytics for the Pages project in the dashboard. It's free and cookieless, and needs no code here.
 
 ## Endpoints
 
@@ -78,7 +93,8 @@ tests/evals.json         retrieval eval set (49 recruiter questions → expected
 .github/workflows/       runs the tests, then deploys to Cloudflare Pages on every push to main
 scripts/build.mjs        builds dist/ and bundles src/ into one dist/_worker.js (Node, no dependencies)
 scripts/test.mjs         runs tests/index.html headlessly in Chromium, then smoke-tests dist/_worker.js
-scripts/og-image.mjs     renders the link-preview card and home-screen icon into public/
+scripts/render-assets.mjs renders the link-preview card, home-screen icon and résumé PDF into public/
+scripts/listings.mjs     generates docs/listings.md (LinkedIn and Naukri text) from the profile
 scripts/build.ps1        the same build in PowerShell, for Windows without Node
 scripts/dev-server.ps1   local static server with a mocked /api/ask for UI checks
 dist/                    deployable output (committed so the repo deploys as-is)
@@ -93,10 +109,10 @@ npm test          # build, then run every test headlessly
 
 `npm test` builds `dist/`, opens `tests/index.html` in headless Chromium, and then loads the bundled `dist/_worker.js` in Node for a smoke test. The test page runs the real modules against a mocked Gemini API, so it needs no key and no network. You can also open `http://localhost:8787/tests/` after `scripts/dev-server.ps1`.
 
-- **27/27 tests passing.** They cover:
+- **29/29 tests passing.** They cover:
   - retrieval: chunking, BM25, synonym expansion, RRF, hybrid search, the embedding cache and the BM25 fallback;
   - the agent loop: tool calls, thought-signature echo, step bounds, unknown tools and hidden thoughts;
-  - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit, which lets requests through if KV fails or hits its daily write cap;
+  - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit, which lets requests through if KV fails or hits its daily write cap, and visit-source counting;
   - the content rules: working-familiarity skills never leak into production skills, every `get_section` value resolves, and **no employer-internal names or verbal-only company numbers appear in the knowledge base or either public page**.
 - **Retrieval eval (BM25 only, the worst case):** hit@5 = 49/49, hit@1 = 35/49. The set includes 13 Gen AI interview questions, for example "how do you prevent hallucinations?", "why no vector database?" and "how do you get structured JSON from an LLM?".
 

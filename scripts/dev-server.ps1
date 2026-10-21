@@ -6,7 +6,7 @@
 # For the real agent locally, use: npx wrangler pages dev dist
 param([int]$Port = 8787)
 $root = Split-Path $PSScriptRoot -Parent
-$types = @{ '.html'='text/html; charset=utf-8'; '.js'='text/javascript; charset=utf-8'; '.json'='application/json'; '.css'='text/css'; '.svg'='image/svg+xml'; '.png'='image/png'; '.ico'='image/x-icon' }
+$types = @{ '.html'='text/html; charset=utf-8'; '.js'='text/javascript; charset=utf-8'; '.mjs'='text/javascript; charset=utf-8'; '.pdf'='application/pdf'; '.json'='application/json'; '.css'='text/css'; '.svg'='image/svg+xml'; '.png'='image/png'; '.ico'='image/x-icon' }
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$Port/")
 $listener.Start()

@@ -705,6 +705,7 @@ body.chatting .dock{display:block}
       '<a class="lnk" href="https://github.com/hardyalsinghdeora" target="_blank" rel="noopener"><span><span class="k">GitHub</span><span class="v">hardyalsinghdeora</span></span><span class="arw">&#8599;</span></a>' +
       '<a class="lnk" href="https://substack.com/@hardyalsingh" target="_blank" rel="noopener"><span><span class="k">Substack</span><span class="v">@hardyalsingh</span></span><span class="arw">&#8599;</span></a>' +
       '<a class="lnk" href="/resume-agentic-ai.html" target="_blank" rel="noopener"><span><span class="k">R&#233;sum&#233;: Agentic AI Architect</span><span class="v">resume-agentic-ai.html</span></span><span class="arw">&#8599;</span></a>' +
+      '<a class="lnk" href="/resume-agentic-ai.pdf" target="_blank" rel="noopener"><span><span class="k">R&#233;sum&#233; PDF: Agentic AI Architect</span><span class="v">resume-agentic-ai.pdf</span></span><span class="arw">&#8599;</span></a>' +
       '<a class="lnk" href="https://hardyalsinghdeora.github.io/case-studies/resume.html" target="_blank" rel="noopener"><span><span class="k">R&#233;sum&#233;: Platform &amp; backend</span><span class="v">case-studies/resume.html</span></span><span class="arw">&#8599;</span></a>' +
       '<a class="lnk" href="https://github.com/hardyalsinghdeora/portfolio" target="_blank" rel="noopener"><span><span class="k">This site&#8217;s source</span><span class="v">github.com/&#8230;/portfolio</span></span><span class="arw">&#8599;</span></a>' +
       '</div>' +
@@ -762,6 +763,18 @@ body.chatting .dock{display:block}
   // The server holds the system prompt and the profile, so only the conversation turns are sent.
   // The reply is the answer text, then U+001E, then JSON { sources, steps, retrieval }.
   var agentDown = false, turns = [];
+  // A ?ref= tag (from the LinkedIn / Naukri links) is counted by the Worker on landing. Keep it for
+  // this visit's questions, and drop it from the address bar so a copied URL doesn't carry it.
+  var ref = null;
+  try {
+    var params = new URLSearchParams(location.search);
+    ref = params.get('ref') || sessionStorage.getItem('ref');
+    if (ref) sessionStorage.setItem('ref', ref);
+    if (params.has('ref')) {
+      params.delete('ref');
+      history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash);
+    }
+  } catch (e) {}
   function askAgent(msgs, opts) {
       var raw = '', text = '';
       function split() {
@@ -772,7 +785,7 @@ body.chatting .dock{display:block}
       }
       return fetch('/api/ask', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: msgs }), signal: opts.signal
+        body: JSON.stringify(ref ? { messages: msgs, ref: ref } : { messages: msgs }), signal: opts.signal
       }).then(function (res) {
         if (!res.ok || !res.body) throw { code: res.status === 429 ? 'rate_limited' : res.status === 503 ? 'not_configured' : 'unavailable' };
         var reader = res.body.getReader(), dec = new TextDecoder();

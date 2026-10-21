@@ -57,6 +57,19 @@ The mic button in the composer lets visitors ask by voice. It uses only what the
 
 `public/` carries Open Graph and Twitter card tags, a `Person` JSON-LD block, a `<noscript>` summary for crawlers, `robots.txt`, `sitemap.xml` and a favicon. `node scripts/render-assets.mjs` re-renders the preview card (`og-image.png`) and `apple-touch-icon.png` from `knowledge/profile.json`, and prints the résumé page to `resume-agentic-ai.pdf`. Run it after changing the headline or the résumé; the outputs are committed.
 
+## Job fit
+
+The **Job fit** chip (or typing something like "check your fit for this role") opens a box for a recruiter to paste a job description. `POST /api/fit` (`src/fit.js`) answers requirement by requirement:
+
+1. One structured-output Gemini call extracts up to 10 requirements, each marked required or nice to have. The description is passed as delimited, untrusted data.
+2. Hybrid retrieval finds the top 3 passages for each requirement. This step makes no LLM call.
+3. A second structured-output call judges each requirement as strong, partial or gap, using only those passages, with cited passage ids.
+4. The code then re-checks every verdict:
+   - a match citing no retrieved passage becomes a gap;
+   - a "strong" backed only by working-familiarity passages drops to partial.
+
+That makes two model calls per check, against the same per-IP limit as questions. The description is never stored or logged, and the page says it is sent to Gemini.
+
 ## LinkedIn and Naukri text
 
 Every build writes [docs/listings.md](docs/listings.md) from `knowledge/profile.json`: LinkedIn headline and About, the skills missing from LinkedIn, Open to Work titles, and the Naukri resume headline, profile summary and key skills, each with its character count. The build fails if a field goes over the site's limit, and a test keeps the skill list to skills the profile actually evidences and runs the text through the redline check. Edit the profile, run `npm test`, and paste from the regenerated file.
@@ -77,6 +90,7 @@ For overall traffic and referrers, turn on Cloudflare Web Analytics for the Page
 | | |
 |---|---|
 | `POST /api/ask` | `{ "messages": [{ "role": "user", "content": "..." }] }` → answer text, then `\u001e`, then `{ sources, steps, retrieval }` |
+| `POST /api/fit` | `{ "jd": "..." }` (80 to 8,000 characters) → `{ summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval }` |
 | `GET /api/search?q=...&k=5` | Retrieval only, with no LLM call. Useful for debugging retrieval quality. |
 
 ## Repo layout
@@ -85,6 +99,7 @@ For overall traffic and referrers, turn on Cloudflare Web Analytics for the Page
 knowledge/profile.json   single source of truth: my career profile (public facts only)
 src/rag.js               chunking, BM25, Gemini embeddings, reciprocal rank fusion
 src/agent.js             system prompt, tool schemas, bounded function-calling loop
+src/fit.js               job-description fit: extract requirements, retrieve evidence, judge, re-check
 src/worker.js            HTTP routing, validation, rate limiting, response format
 src/knowledge.js         generated from profile.json by the build
 public/                  the page (index.html) and the Agentic AI Architect résumé
@@ -109,9 +124,10 @@ npm test          # build, then run every test headlessly
 
 `npm test` builds `dist/`, opens `tests/index.html` in headless Chromium, and then loads the bundled `dist/_worker.js` in Node for a smoke test. The test page runs the real modules against a mocked Gemini API, so it needs no key and no network. You can also open `http://localhost:8787/tests/` after `scripts/dev-server.ps1`.
 
-- **29/29 tests passing.** They cover:
+- **31/31 tests passing.** They cover:
   - retrieval: chunking, BM25, synonym expansion, RRF, hybrid search, the embedding cache and the BM25 fallback;
   - the agent loop: tool calls, thought-signature echo, step bounds, unknown tools and hidden thoughts;
+  - job fit: two structured-output calls, uncited matches turned into gaps, working familiarity capped at partial, requirement and length caps, and the endpoint's error codes;
   - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit, which lets requests through if KV fails or hits its daily write cap, and visit-source counting;
   - the content rules: working-familiarity skills never leak into production skills, every `get_section` value resolves, and **no employer-internal names or verbal-only company numbers appear in the knowledge base or either public page**.
 - **Retrieval eval (BM25 only, the worst case):** hit@5 = 49/49, hit@1 = 35/49. The set includes 13 Gen AI interview questions, for example "how do you prevent hallucinations?", "why no vector database?" and "how do you get structured JSON from an LLM?".

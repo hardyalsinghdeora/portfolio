@@ -1233,12 +1233,18 @@ function sameOrigin(request) {
   return !origin || origin === new URL(request.url).origin;
 }
 
+// Fails open: if KV is down or past the free plan's daily write cap, answering unmetered
+// beats failing every visitor until the cap resets.
 async function underLimit(kv, request) {
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   const key = `ask:${ip}:${Math.floor(Date.now() / 3600000)}`;
-  const n = parseInt((await kv.get(key)) || "0", 10);
-  if (n >= HOURLY_LIMIT) return false;
-  await kv.put(key, String(n + 1), { expirationTtl: 3700 });
+  try {
+    const n = parseInt((await kv.get(key)) || "0", 10);
+    if (n >= HOURLY_LIMIT) return false;
+    await kv.put(key, String(n + 1), { expirationTtl: 3700 });
+  } catch (err) {
+    console.warn("rate limit unavailable, allowing request:", err && err.message);
+  }
   return true;
 }
 

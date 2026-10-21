@@ -46,6 +46,17 @@ Answer text  U+001E  { sources, steps, retrieval }  →  page renders sources + 
 
 More detail, including trade-offs and what I'd do at larger scale, is in [docs/architecture.md](docs/architecture.md).
 
+## Voice
+
+The mic button in the composer lets visitors ask by voice. It uses only what the browser ships, so it costs nothing and needs no key or server change:
+
+- **Speech in:** the Web Speech API (`SpeechRecognition`) turns speech into text, which then goes through the same `/api/ask` agent as a typed question. It works in Chrome, Edge and Safari. Firefox doesn't support it, so the mic stays hidden there. Chrome and Edge send the audio to their vendor's speech service to recognise it.
+- **Speech out:** `speechSynthesis` reads the answer to a voice question aloud, one sentence at a time. Links and email addresses are replaced with "on screen" rather than spelled out. The speaker button in the top bar mutes spoken replies, and the choice is remembered. Typed questions are never read aloud.
+
+## Link previews and search
+
+`public/` carries Open Graph and Twitter card tags, a `Person` JSON-LD block, a `<noscript>` summary for crawlers, `robots.txt`, `sitemap.xml` and a favicon. `node scripts/og-image.mjs` re-renders the preview card (`og-image.png`) and `apple-touch-icon.png` from `knowledge/profile.json`. Run it after changing the headline; the PNGs are committed.
+
 ## Endpoints
 
 | | |
@@ -67,6 +78,7 @@ tests/evals.json         retrieval eval set (49 recruiter questions → expected
 .github/workflows/       runs the tests, then deploys to Cloudflare Pages on every push to main
 scripts/build.mjs        builds dist/ and bundles src/ into one dist/_worker.js (Node, no dependencies)
 scripts/test.mjs         runs tests/index.html headlessly in Chromium, then smoke-tests dist/_worker.js
+scripts/og-image.mjs     renders the link-preview card and home-screen icon into public/
 scripts/build.ps1        the same build in PowerShell, for Windows without Node
 scripts/dev-server.ps1   local static server with a mocked /api/ask for UI checks
 dist/                    deployable output (committed so the repo deploys as-is)

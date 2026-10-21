@@ -5,6 +5,46 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Hardyal Singh &#8212; Agentic AI Architect and Principal Software Engineer. Production LLM agents: MCP tool use, Gemini function calling, hybrid RAG with evals, multi-provider structured output (Claude, Gemini, Ollama), on 15 years of backend engineering.">
 <title>Hardyal Singh &#8212; Agentic AI Architect &amp; Principal Software Engineer</title>
+<link rel="canonical" href="https://hardyalsinghdeora.pages.dev/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#5B62E8">
+<meta property="og:type" content="profile">
+<meta property="og:site_name" content="Hardyal Singh">
+<meta property="og:url" content="https://hardyalsinghdeora.pages.dev/">
+<meta property="og:title" content="Hardyal Singh &#8212; Agentic AI Architect &amp; Principal Software Engineer">
+<meta property="og:description" content="Ask my portfolio agent anything about my work. Production LLM agents, MCP tool use, hybrid RAG with evals, on 15 years of backend engineering.">
+<meta property="og:image" content="https://hardyalsinghdeora.pages.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hardyal Singh, Agentic AI Architect and Principal Software Engineer">
+<meta property="profile:first_name" content="Hardyal">
+<meta property="profile:last_name" content="Singh Deora">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hardyal Singh &#8212; Agentic AI Architect &amp; Principal Software Engineer">
+<meta name="twitter:description" content="Ask my portfolio agent anything about my work. Production LLM agents, MCP tool use, hybrid RAG with evals.">
+<meta name="twitter:image" content="https://hardyalsinghdeora.pages.dev/og-image.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Hardyal Singh Deora",
+  "alternateName": "Hardyal Singh",
+  "jobTitle": "Agentic AI Architect & Principal Software Engineer",
+  "description": "I build LLM agents that are safe to leave running: grounded in retrieved evidence, bounded in steps and cost, least-privilege by default, and auditable, on fifteen years of production backend engineering.",
+  "url": "https://hardyalsinghdeora.pages.dev/",
+  "image": "https://hardyalsinghdeora.pages.dev/og-image.png",
+  "email": "mailto:hardyalsinghdeora@gmail.com",
+  "address": { "@type": "PostalAddress", "addressLocality": "Ahmedabad", "addressRegion": "Gujarat", "addressCountry": "IN" },
+  "alumniOf": { "@type": "CollegeOrUniversity", "name": "Rajasthan Technical University, Kota" },
+  "knowsAbout": ["Agentic AI", "LLM agents", "Model Context Protocol", "Retrieval-augmented generation", "Gemini function calling", "TypeScript", "Node.js", "PostgreSQL", "AWS", "Software architecture"],
+  "sameAs": [
+    "https://www.linkedin.com/in/hardyalsinghdeora",
+    "https://github.com/hardyalsinghdeora",
+    "https://substack.com/@hardyalsingh"
+  ]
+}
+</script>
 <style>:root{color-scheme:light dark}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}</style>
 </head>
 <body>
@@ -83,6 +123,11 @@ body.chatting .mark{opacity:1; transform:none; pointer-events:auto}
 }
 .tbtn:hover{color:var(--ink)}
 .tbtn svg{width:16px; height:16px}
+.tools{display:flex; gap:8px}
+.tbtn[hidden]{display:none}
+#voice-btn .off{display:none}
+#voice-btn.muted .on{display:none}
+#voice-btn.muted .off{display:block}
 
 /* ---------- ghost wordmark ---------- */
 .ghost{
@@ -153,6 +198,18 @@ h1.role{
 .send:hover{transform:scale(1.05)}
 .send:active{transform:scale(.96)}
 .send svg{width:17px; height:17px}
+.mic{
+  width:40px; height:40px; flex:none; border:0; border-radius:999px; cursor:pointer; padding:0;
+  background:transparent; color:var(--ink-2); display:none; place-items:center;
+  transition:color .16s, background .16s;
+}
+html.voice .mic{display:grid}
+.mic:hover{color:var(--ink); background:var(--soft)}
+.mic svg{width:18px; height:18px}
+.mic.on{color:#fff; background:#D93F3F; animation:mic-pulse 1.4s ease-in-out infinite}
+@keyframes mic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(217,63,63,.4)} 50%{box-shadow:0 0 0 8px rgba(217,63,63,0)}}
+.noscript{max-width:600px; margin:28px auto 0; padding:0 20px; color:var(--ink-2); line-height:1.6}
+.noscript a{color:var(--accent)}
 
 .chips{
   display:flex; flex-wrap:wrap; gap:9px; justify-content:center; margin-top:18px;
@@ -331,9 +388,15 @@ body.chatting .dock{display:block}
   <header class="topbar">
     <button class="mark" id="home-btn"><span class="glyph">HS</span> Hardyal Singh</button>
     <span></span>
-    <button class="tbtn" id="theme-btn" aria-label="Toggle theme" title="Toggle theme">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-    </button>
+    <div class="tools">
+      <button class="tbtn" id="voice-btn" hidden aria-pressed="true" aria-label="Read answers to voice questions aloud" title="Spoken replies to voice questions: on">
+        <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
+        <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
+      </button>
+      <button class="tbtn" id="theme-btn" aria-label="Toggle theme" title="Toggle theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
   </header>
 
   <section class="home" id="home">
@@ -345,6 +408,9 @@ body.chatting .dock{display:block}
     <div class="composer">
       <form class="ask" id="form-home">
         <input id="in-home" type="text" placeholder="Ask me anything about my work&#8230;" autocomplete="off" aria-label="Ask a question">
+        <button class="mic" type="button" aria-label="Ask by voice" aria-pressed="false" title="Ask by voice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
         <button class="send" type="submit" aria-label="Send">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </button>
@@ -353,13 +419,28 @@ body.chatting .dock{display:block}
     </div>
   </section>
 
-  <section class="chat" id="chat"><div class="thread" id="thread"></div></section>
+  <noscript>
+    <div class="noscript">
+      <p>This page is a chat that needs JavaScript. The short version:</p>
+      <ul>
+        <li><b>Agentic AI Architect and Principal Software Engineer</b>, 15 years of production backend engineering (TypeScript, Node.js, PostgreSQL, AWS), based in Ahmedabad, India.</li>
+        <li>Built: an unattended MCP-based pull-request review agent in daily use, a multi-provider AI code reviewer (Claude, Gemini, Ollama), and this portfolio agent with hybrid RAG on Cloudflare Workers.</li>
+        <li>Led: a live MySQL to PostgreSQL commerce-platform migration and a PHP to Node.js/Angular strangler migration.</li>
+      </ul>
+      <p><a href="/resume-agentic-ai.html">R&#233;sum&#233;</a> &#183; <a href="mailto:hardyalsinghdeora@gmail.com">hardyalsinghdeora@gmail.com</a> &#183; <a href="https://www.linkedin.com/in/hardyalsinghdeora">LinkedIn</a> &#183; <a href="https://github.com/hardyalsinghdeora">GitHub</a></p>
+    </div>
+  </noscript>
+
+  <section class="chat" id="chat"><div class="thread" id="thread" aria-live="polite"></div></section>
 
   <div class="dock">
     <div class="inner">
       <div class="chips" id="chips-dock"></div>
       <form class="ask" id="form-dock">
         <input id="in-dock" type="text" placeholder="Ask me anything about my work&#8230;" autocomplete="off" aria-label="Ask a question">
+        <button class="mic" type="button" aria-label="Ask by voice" aria-pressed="false" title="Ask by voice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
         <button class="send" type="submit" aria-label="Send">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </button>
@@ -759,7 +840,7 @@ body.chatting .dock{display:block}
     return html;
   }
 
-  function askLive(q, turn) {
+  function askLive(q, turn, voice) {
     var slot = turn.querySelector('.pending');
     turns.push({ role: 'user', content: q });
     if (turns.length > 10) turns = turns.slice(-10);
@@ -780,25 +861,28 @@ body.chatting .dock{display:block}
     }).then(function (r) {
       turns.push({ role: 'assistant', content: r.text });
       render(r.text, true, r.meta); scrollEnd();
+      if (voice) speak(r.text);
     }).catch(function (e) {
       turns.pop();
       var code = e && e.code;
       if (code === 'cancelled') { render(e.text || '(stopped)', true); return; }
       if (code === 'not_granted' || code === 'sampling_disabled' || code === 'not_declared' || code === 'capability_disabled') sampleDead = true;
       var msg = code === 'rate_limited' ? 'Claude is busy for you right now - try again in a minute, or use the topics below.' : null;
-      if (e && e.text && code !== 'refused') { render(e.text, true); return; }
+      if (e && e.text && code !== 'refused') { render(e.text, true); if (voice) speak(e.text); return; }
       var ans = route(q) ? A[route(q)] : fallback(q);
       slot.className = 'answer';
       slot.innerHTML = (msg ? '<div class="note" style="margin:0 0 14px">' + msg + '</div>' : '') +
         '<h2 class="a-head">' + ans.head + '</h2><div class="a-body">' + ans.body + '</div>' +
         '<div class="followups">' + ans.fu.map(function (f) { return '<button class="fu" data-q="' + f + '">' + f + '</button>'; }).join('') + '</div>';
       scrollEnd();
+      if (voice) speakAnswer(ans);
     });
   }
 
-  function ask(q, scripted) {
+  function ask(q, scripted, voice) {
     q = (q || '').trim();
     if (!q) return;
+    stopSpeaking();
 
     document.body.classList.add('chatting');
 
@@ -810,7 +894,7 @@ body.chatting .dock{display:block}
     thread.appendChild(turn);
     scrollEnd();
 
-    if (!scripted && sampleFn && !sampleDead) { askLive(q, turn); return; }
+    if (!scripted && sampleFn && !sampleDead) { askLive(q, turn, voice); return; }
     var key = route(q);
     var ans = key ? A[key] : fallback(q);
 
@@ -825,6 +909,7 @@ body.chatting .dock{display:block}
                          }).join('') +
                        '</div>';
       scrollEnd();
+      if (voice) speakAnswer(ans);
     }, 460);
   }
 
@@ -838,10 +923,13 @@ body.chatting .dock{display:block}
   }
 
   document.addEventListener('click', function (e) {
+    var m = e.target.closest('.mic');
+    if (m) { listen(m.closest('form')); return; }
     var b = e.target.closest('[data-q]');
     if (b) { ask(b.getAttribute('data-q'), true); return; }
     if (e.target.closest('#home-btn')) {
       document.body.classList.remove('chatting');
+      stopSpeaking();
       thread.innerHTML = '';
       window.scrollTo({ top: 0 });
     }
@@ -851,11 +939,126 @@ body.chatting .dock{display:block}
     document.getElementById('form-' + id).addEventListener('submit', function (e) {
       e.preventDefault();
       var input = document.getElementById('in-' + id);
-      ask(input.value);
+      submit(id, input.value, false);
       input.value = '';
-      if (id === 'home') setTimeout(function () { document.getElementById('in-dock').focus(); }, 60);
     });
   });
+
+  function submit(id, q, voice) {
+    ask(q, false, voice);
+    // After a spoken question, don't focus the dock input: on phones that pops the keyboard.
+    if (id === 'home' && !voice) setTimeout(function () { document.getElementById('in-dock').focus(); }, 60);
+  }
+
+  // ---------- voice: browser speech recognition in, speech synthesis out ----------
+  // Both are built into the browser, so voice costs nothing and needs no key or server change:
+  // the transcript goes through the same ask() path as a typed question.
+  var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var synth = window.speechSynthesis;
+  var voiceBtn = document.getElementById('voice-btn');
+  var muted = false, listening = null;
+  try { muted = localStorage.getItem('voice-muted') === '1'; } catch (e) {}
+  if (Rec) document.documentElement.classList.add('voice');
+  if (Rec && synth) { voiceBtn.hidden = false; setMuteUI(); }
+
+  function setMuteUI() {
+    voiceBtn.classList.toggle('muted', muted);
+    voiceBtn.setAttribute('aria-pressed', muted ? 'false' : 'true');
+    voiceBtn.title = 'Spoken replies to voice questions: ' + (muted ? 'off' : 'on');
+  }
+  voiceBtn.addEventListener('click', function () {
+    muted = !muted;
+    try { localStorage.setItem('voice-muted', muted ? '1' : '0'); } catch (e) {}
+    if (muted) stopSpeaking();
+    setMuteUI();
+  });
+
+  function stopSpeaking() { if (synth) synth.cancel(); }
+
+  // Links and emails are on screen; reading them out character by character helps nobody.
+  function speakable(text) {
+    return text.replace(/(https?:\/\/|(^|\s)\/case\/)\S*[^\s.,;:!?)]/g, ' the link on screen')
+      .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, 'the address on screen')
+      .replace(/[*_`#>\u2022]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function pickVoice() {
+    function score(v) {
+      return (/natural|neural|google|premium|enhanced/i.test(v.name) ? 10 : 0) +
+        (/en[-_]IN/i.test(v.lang) ? 3 : /en[-_]GB/i.test(v.lang) ? 2 : /en[-_]US/i.test(v.lang) ? 1 : 0);
+    }
+    var vs = synth.getVoices().filter(function (v) { return /^en([-_]|$)/i.test(v.lang); });
+    vs.sort(function (a, b) { return score(b) - score(a); });
+    return vs[0] || null;
+  }
+
+  function speak(text) {
+    if (!synth || muted || !text) return;
+    stopSpeaking();
+    var v = pickVoice();
+    // One utterance per sentence: Chrome silently cuts off long utterances after about 15 seconds.
+    speakable(text).split(/(?<=[.!?])\s+/).forEach(function (s) {
+      if (!s) return;
+      var u = new SpeechSynthesisUtterance(s);
+      if (v) u.voice = v;
+      u.lang = v ? v.lang : 'en-IN';
+      u.rate = 1.02;
+      synth.speak(u);
+    });
+  }
+
+  // Scripted answers are long HTML; speak the heading and the first paragraph.
+  function speakAnswer(ans) {
+    var d = document.createElement('div');
+    d.innerHTML = '<p>' + ans.head + '.</p>' + ans.body;
+    var ps = d.querySelectorAll('p');
+    speak(Array.prototype.slice.call(ps, 0, 2).map(function (p) { return p.textContent; }).join(' '));
+  }
+
+  function hint(input, text) {
+    var was = input.getAttribute('placeholder');
+    input.setAttribute('placeholder', text);
+    setTimeout(function () { input.setAttribute('placeholder', was); }, 4000);
+  }
+
+  function listen(form) {
+    if (listening) { listening.stop(); return; }
+    stopSpeaking();
+    var input = form.querySelector('input'), mic = form.querySelector('.mic');
+    var rec = new Rec(), heard = '';
+    rec.lang = /^en/i.test(navigator.language || '') ? navigator.language : 'en-IN';
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    function setOn(on) {
+      mic.classList.toggle('on', on);
+      mic.setAttribute('aria-pressed', on ? 'true' : 'false');
+      mic.setAttribute('aria-label', on ? 'Stop listening' : 'Ask by voice');
+    }
+    rec.onresult = function (e) {
+      var interim = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) heard += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      input.value = (heard + interim).trim();
+    };
+    rec.onerror = function (e) {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') hint(input, 'Microphone blocked: allow it to ask by voice');
+      else if (e.error === 'no-speech') hint(input, 'Didn\u2019t catch that. Tap the mic and try again');
+      else if (e.error === 'network') hint(input, 'Voice needs a connection. Type your question instead');
+    };
+    rec.onend = function () {
+      listening = null;
+      setOn(false);
+      var q = heard.trim();
+      input.value = '';
+      if (q) submit(form.id.replace('form-', ''), q, true);
+    };
+    listening = rec;
+    input.value = '';
+    setOn(true);
+    try { rec.start(); } catch (err) { listening = null; setOn(false); }
+  }
 
   var themeBtn = document.getElementById('theme-btn');
   themeBtn.addEventListener('click', function () {

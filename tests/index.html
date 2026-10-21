@@ -253,6 +253,25 @@ await test("worker: errors and guards", async () => {
   eq((await handle(post({ messages: turns }), E, mockGemini({ script: "429" }))).status, 429);
   eq(await (await handle(req("/"), E, mockGemini())).text(), "static");
 });
+await test("worker: rate limit counts per IP, and a failing KV store lets requests through", async () => {
+  const answer = () => mockGemini({ script: [
+    [{ functionCall: { name: "search_profile", args: { query: "agents" } } }],
+    [{ text: "Bounded agents." }],
+  ] });
+  const store = new Map();
+  const kv = { get: async (k) => store.get(k) ?? null, put: async (k, v) => { store.set(k, v); } };
+  const E = { ...env, ASSETS: assets, RATE_KV: kv };
+  const ip = { "cf-connecting-ip": "203.0.113.7" };
+  eq((await handle(post({ messages: turns }, ip), E, answer())).status, 200);
+  eq([...store.values()][0], "1", "first question counted");
+  store.set([...store.keys()][0], "30");
+  eq((await handle(post({ messages: turns }, ip), E, answer())).status, 429, "over the hourly limit");
+  // Free-plan KV caps writes per day; past the cap put() throws. Visitors must still get answers.
+  const full = { get: async () => null, put: async () => { throw new Error("KV put() limit exceeded for the day."); } };
+  eq((await handle(post({ messages: turns }, ip), { ...E, RATE_KV: full }, answer())).status, 200, "write limit");
+  const down = { get: async () => { throw new Error("KV unavailable"); }, put: async () => {} };
+  eq((await handle(post({ messages: turns }, ip), { ...E, RATE_KV: down }, answer())).status, 200, "read failure");
+});
 await test("worker: /api/search returns ranked passages without calling the LLM", async () => {
   const calls = [];
   const res = await handle(req("/api/search?q=migration%20backfill&k=3"), { ...env, ASSETS: assets }, mockGemini({ calls }));

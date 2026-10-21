@@ -107,6 +107,12 @@ await test("no redlined names or verbal-only numbers in the knowledge base or pu
     assert(!m, `redline "${m && m[0]}" in ${name}`);
   }
 });
+// The profile lives server-side behind /api/ask; shipping a copy in the page costs every visitor ~50KB.
+await test("the public page does not embed the profile", async () => {
+  const page = await fetch("../public/index.html").then((r) => r.text());
+  assert(!page.includes(PROFILE.meta.purpose), "profile JSON found in index.html");
+  assert(page.length < 100000, "index.html is " + Math.round(page.length / 1024) + "KB");
+});
 await test("Gen AI sections are indexed and every get_section value resolves", async () => {
   for (const id of ["agentic-practices-output", "agentic-practices-safety", "agentic-rag", "genai-rag_experience", "genai-hallucination_control"]) {
     assert(chunks.some((c) => c.id === id), id + " missing");

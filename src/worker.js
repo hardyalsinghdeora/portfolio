@@ -1,5 +1,6 @@
-// Cloudflare Pages advanced-mode worker. Serves the static site and two endpoints:
+// Cloudflare Pages advanced-mode worker. Serves the static site and three endpoints:
 //   POST /api/ask     the portfolio agent (Gemini function calling + hybrid RAG)
+//   POST /api/fit     job-description fit: { jd } -> requirement-by-requirement match with sources
 //   GET  /api/search  retrieval only, no LLM call: ?q=... returns the top passages
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
@@ -12,6 +13,7 @@
 import { PROFILE } from "./knowledge.js";
 import { buildChunks, buildIndex, search } from "./rag.js";
 import { runAgent } from "./agent.js";
+import { assessFit, JD_MIN, JD_MAX } from "./fit.js";
 
 const MAX_TURNS = 10;          // matches the page, which keeps the last 10 turns
 const MAX_CHARS = 1000;        // per message
@@ -49,6 +51,10 @@ export async function handle(request, env, fetchImpl) {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
       return await ask(request, env, fetchImpl);
     }
+    if (url.pathname === "/api/fit") {
+      if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
+      return await fit(request, env, fetchImpl);
+    }
     if (url.pathname === "/api/search") {
       if (request.method !== "GET") return json(405, { error: "method_not_allowed" });
       return await searchOnly(request, env, url, fetchImpl);
@@ -84,6 +90,29 @@ async function ask(request, env, fetchImpl) {
   return new Response(result.text + SEP + JSON.stringify(meta), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
   });
+}
+
+async function fit(request, env, fetchImpl) {
+  if (!sameOrigin(request)) return json(403, { error: "forbidden" });
+  if (!env.GEMINI_API_KEY) return json(503, { error: "not_configured" });
+
+  let body;
+  try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }
+  const jd = typeof (body && body.jd) === "string" ? body.jd.trim() : "";
+  if (jd.length < JD_MIN) return json(400, { error: "jd_too_short", min: JD_MIN });
+  if (jd.length > JD_MAX) return json(400, { error: "jd_too_long", max: JD_MAX });
+  if (env.RATE_KV && !(await underLimit(env.RATE_KV, request))) return json(429, { error: "rate_limited" });
+
+  let result;
+  try {
+    result = await assessFit({ jd, index: getIndex(), env, fetchImpl });
+  } catch (err) {
+    console.error("fit failed", err && err.status, err && err.detail);
+    return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });
+  }
+  // The description itself is never stored or logged.
+  await countSource(env, request, "fit", body.ref);
+  return json(200, result);
 }
 
 async function searchOnly(request, env, url, fetchImpl) {

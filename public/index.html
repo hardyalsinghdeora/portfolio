@@ -359,6 +359,32 @@ body.chatting .chat{display:block}
 }
 .fu:hover{border-style:solid; border-color:var(--accent); color:var(--ink)}
 
+/* ---------- job fit ---------- */
+.fit-form textarea{
+  width:100%; box-sizing:border-box; min-height:180px; resize:vertical; padding:14px 16px;
+  border:1px solid var(--line); border-radius:var(--r-sm); background:var(--panel); color:var(--ink);
+  font:inherit; font-size:.92rem; line-height:1.55;
+}
+.fit-form textarea:focus{outline:0; border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.fit-bar{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; flex-wrap:wrap}
+.fit-bar .count{font-size:.8rem; color:var(--ink-3)}
+.fit-go{
+  border:0; border-radius:999px; padding:10px 18px; cursor:pointer; font:inherit; font-weight:600; font-size:.88rem;
+  background:var(--accent); color:var(--accent-ink);
+}
+.fit-go[disabled]{opacity:.5; cursor:default}
+.fit-msg{margin-top:10px; font-size:.85rem; color:var(--h6)}
+.fit-counts{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 4px}
+.fit-list{list-style:none; margin:12px 0 0; padding:0; display:grid; gap:10px}
+.fit-list li{padding:12px 14px; border:1px solid var(--line-2); border-radius:var(--r-sm); background:var(--panel)}
+.fit-req{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; font-weight:600; color:var(--ink); font-size:.92rem}
+.fit-kind{font-size:.72rem; font-weight:600; color:var(--ink-3); text-transform:uppercase; letter-spacing:.04em}
+.fit-ev{margin:6px 0 0; font-size:.88rem; line-height:1.55; color:var(--ink-2)}
+.fit-list .srcs{margin-top:8px}
+.badge{display:inline-block; padding:2px 9px; border-radius:999px; font-size:.74rem; font-weight:700; letter-spacing:.02em;
+  color:var(--m); background:color-mix(in srgb,var(--m) 13%,transparent); border:1px solid color-mix(in srgb,var(--m) 30%,transparent)}
+.badge.strong{--m:var(--h2)} .badge.partial{--m:var(--h6)} .badge.gap{--m:var(--ink-3)}
+
 /* ---------- dock ---------- */
 .dock{
   position:fixed; left:0; right:0; bottom:0; z-index:30;
@@ -467,6 +493,7 @@ body.chatting .dock{display:block}
   var CHIPS = [
     { label:'AI agents',  icon:'kit', c:H[1], q:'How do you build AI agents?' },
     { label:'This agent', icon:'sys', c:H[2], q:'How does this RAG agent work?' },
+    { label:'Job fit',    icon:'exp', c:H[3], fit:true },
     { label:'Me',         icon:'me',  c:H[0], q:'Who are you?' },
     { label:'Systems',    icon:'sys', c:H[1], q:'What systems have you built?' },
     { label:'Experience', icon:'exp', c:H[2], q:'Walk me through your experience.' },
@@ -743,7 +770,7 @@ body.chatting .dock{display:block}
   var thread = document.getElementById('thread');
 
   function chipHTML(c) {
-    return '<button class="chip" data-q="' + c.q + '" style="--c:' + c.c + '">' +
+    return '<button class="chip" ' + (c.fit ? 'data-fit="1"' : 'data-q="' + c.q + '"') + ' style="--c:' + c.c + '">' +
            '<span class="ci">' + ICON[c.icon] + '</span>' + c.label + '</button>';
   }
   document.getElementById('chips-home').innerHTML = CHIPS.map(chipHTML).join('');
@@ -881,6 +908,7 @@ body.chatting .dock{display:block}
     q = (q || '').trim();
     if (!q) return;
     stopSpeaking();
+    if (!scripted && /\b(job description|role fit|fit for (this|a|the) (role|job)|check (my|your) fit)\b/i.test(q)) { openFit(q); return; }
 
     document.body.classList.add('chatting');
 
@@ -921,6 +949,7 @@ body.chatting .dock{display:block}
   }
 
   document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-fit]')) { openFit(); return; }
     var m = e.target.closest('.mic');
     if (m) { listen(m.closest('form')); return; }
     var b = e.target.closest('[data-q]');
@@ -946,6 +975,88 @@ body.chatting .dock{display:block}
     ask(q, false, voice);
     // After a spoken question, don't focus the dock input: on phones that pops the keyboard.
     if (id === 'home' && !voice) setTimeout(function () { document.getElementById('in-dock').focus(); }, 60);
+  }
+
+  // ---------- job fit: paste a job description, get a requirement-by-requirement match ----------
+  var FIT_MIN = 80, FIT_MAX = 8000;
+  var FIT_LABEL = { strong:'Strong match', partial:'Partial', gap:'Gap' };
+  var FIT_COUNT = { strong:'strong', partial:'partial', gap:'gap' };
+
+  function openFit(asked) {
+    document.body.classList.add('chatting');
+    var turn = document.createElement('div');
+    turn.className = 'turn';
+    turn.innerHTML = '<div class="q"><span></span></div>' +
+      '<div class="answer"><h2 class="a-head">Paste a job description</h2>' +
+      '<div class="a-body"><p>I&#8217;ll check it against my profile requirement by requirement: each match cites the passage it comes from, ' +
+      'and gaps are stated plainly rather than stretched.</p></div>' +
+      '<form class="fit-form"><textarea maxlength="' + FIT_MAX + '" aria-label="Job description" placeholder="Paste the full job description, including the requirements section&#8230;"></textarea>' +
+      '<div class="fit-bar"><span class="count">0 / ' + FIT_MAX + '</span><button class="fit-go" type="submit" disabled>Check my fit</button></div>' +
+      '<div class="fit-msg" hidden></div></form>' +
+      '<div class="note">The description is sent to Google&#8217;s Gemini API to be analysed. This site doesn&#8217;t store it.</div></div>';
+    turn.querySelector('.q span').textContent = asked || 'How well do you fit this role?';
+    thread.appendChild(turn);
+    var form = turn.querySelector('form'), ta = form.querySelector('textarea'), go = form.querySelector('.fit-go');
+    ta.addEventListener('input', function () {
+      form.querySelector('.count').textContent = ta.value.length + ' / ' + FIT_MAX;
+      go.disabled = ta.value.trim().length < FIT_MIN;
+    });
+    form.addEventListener('submit', function (e) { e.preventDefault(); runFit(turn, ta.value.trim()); });
+    scrollEnd();
+    setTimeout(function () { ta.focus({ preventScroll: true }); }, 60);
+  }
+
+  function fitMsg(turn, text) {
+    var m = turn.querySelector('.fit-msg');
+    m.hidden = false; m.textContent = text;
+  }
+
+  function runFit(turn, jd) {
+    var form = turn.querySelector('form'), go = form.querySelector('.fit-go');
+    if (jd.length < FIT_MIN) { fitMsg(turn, 'That looks too short for a job description. Paste the full text.'); return; }
+    go.disabled = true; go.textContent = 'Checking\u2026';
+    fetch('/api/fit', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(ref ? { jd: jd, ref: ref } : { jd: jd })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) { return { status: res.status, data: data }; });
+    }).then(function (r) {
+      if (r.status === 200) { renderFit(turn, r.data); return; }
+      go.disabled = false; go.textContent = 'Check my fit';
+      if (r.status === 400 && r.data.error === 'jd_too_long') fitMsg(turn, 'That is over ' + FIT_MAX + ' characters. Trim it to the role and requirements sections.');
+      else if (r.status === 400) fitMsg(turn, 'That looks too short for a job description. Paste the full text.');
+      else if (r.status === 429) fitMsg(turn, 'The agent is busy right now. Try again in a minute.');
+      else fitMsg(turn, 'The fit check needs the live agent, which isn\u2019t available right now. Email me the description and I\u2019ll reply myself.');
+    }).catch(function () {
+      go.disabled = false; go.textContent = 'Check my fit';
+      fitMsg(turn, 'Couldn\u2019t reach the agent. Check your connection, or email me the description.');
+    });
+  }
+
+  function renderFit(turn, d) {
+    var reqs = d.requirements || [], c = d.counts || {};
+    var html = '<h2 class="a-head">How I fit this role</h2>' +
+      (d.summary ? '<div class="a-body">' + toHTML(String(d.summary)) + '</div>' : '');
+    if (reqs.length) {
+      html += '<div class="fit-counts">' + ['strong', 'partial', 'gap'].map(function (k) {
+        return '<span class="badge ' + k + '">' + (c[k] || 0) + ' ' + FIT_COUNT[k] + '</span>';
+      }).join('') + '</div><ul class="fit-list">' + reqs.map(function (r) {
+        var m = FIT_LABEL[r.match] ? r.match : 'gap';
+        return '<li><div class="fit-req"><span class="badge ' + m + '">' + FIT_LABEL[m] + '</span>' + esc(String(r.requirement)) +
+          '<span class="fit-kind">' + (r.kind === 'nice' ? 'nice to have' : 'required') + '</span></div>' +
+          '<p class="fit-ev">' + esc(String(r.evidence || '')) + '</p>' +
+          (r.sources && r.sources.length ? '<div class="srcs"><span>Sources:</span>' + r.sources.map(function (s) {
+            return '<span class="src">' + esc(String(s.title || s.id)) + '</span>';
+          }).join('') + '</div>' : '') + '</li>';
+      }).join('') + '</ul>';
+    }
+    var mode = d.retrieval === 'hybrid' ? 'hybrid RAG (BM25 + embeddings)' : 'keyword RAG (BM25)';
+    html += '<div class="note">Checked against my written profile with ' + mode + '. A match needs a cited passage; anything I know only at a working level is marked partial. ' +
+      '<a href="mailto:hardyalsinghdeora@gmail.com?subject=A%20role%20that%20may%20fit" style="color:var(--accent)">Email me about this role</a>.</div>' +
+      '<div class="followups"><button class="fu" data-fit="1">Check another role</button><button class="fu" data-q="How do I get in touch?">How do I get in touch?</button></div>';
+    var slot = turn.querySelector('.answer');
+    slot.innerHTML = html;
+    scrollEnd();
   }
 
   // ---------- voice: browser speech recognition in, speech synthesis out ----------

@@ -30,6 +30,7 @@ import { PROFILE } from "../src/knowledge.js";
 import { buildChunks, buildIndex, bm25, search, rrf, tokenize } from "../src/rag.js";
 import { runAgent, MAX_STEPS } from "../src/agent.js";
 import { handle, validTurns, SEP } from "../src/worker.js";
+import { assessFit, JD_MIN, JD_MAX } from "../src/fit.js";
 import { buildListings, listingsMarkdown, LIMITS } from "../scripts/listings.mjs";
 
 const out = document.getElementById("out");
@@ -297,6 +298,70 @@ await test("worker: ?ref= links count visits and questions per source, and nothi
   eq(store.get(`ref:ask:naukri:${month}`), "1");
   const down = { get: async () => { throw new Error("KV unavailable"); }, put: async () => {} };
   eq(await (await handle(req("/?ref=linkedin", { headers: browser }), { ...E, RATE_KV: down }, answer())).text(), "static", "KV failure");
+});
+// Mock Gemini for the fit pipeline: the extract call returns `reqs`; the judge call builds its
+// verdicts with judge(candidateIdsPerRequirement), read from the real prompt the pipeline sent.
+function mockFit(reqs, judge, calls = []) {
+  return async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    if (url.includes(":batchEmbedContents")) return new Response("off", { status: 500 });
+    const text = body.contents[0].parts[0].text;
+    const out = text.startsWith("Job description:")
+      ? { requirements: reqs }
+      : judge([...text.matchAll(/candidates: (.*)$/gm)].map((m) => m[1] === "none" ? [] : m[1].split(", ")));
+    return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: JSON.stringify(out) }] } }] });
+  };
+}
+const JD = "Senior AI engineer. Must have: production LLM agents with tool use (MCP), PostgreSQL at scale. Nice to have: Kubernetes, Rust. We offer great benefits.";
+
+await test("fit: two structured calls, grounded verdicts, and no overclaiming", async () => {
+  const calls = [];
+  const reqs = [
+    { requirement: "Production LLM agents with tool use (MCP)", kind: "must" },
+    { requirement: "PostgreSQL at scale", kind: "must" },
+    { requirement: "Kubernetes in production", kind: "nice" },
+    { requirement: "Rust", kind: "nice" },
+  ];
+  let cands;
+  const r = await assessFit({ jd: JD, index, env, fetchImpl: mockFit(reqs, (c) => {
+    cands = c;
+    const fam = c[2].find((id) => id.startsWith("familiarity-"));
+    return { summary: "Strong on agents.", results: [
+      { index: 0, match: "strong", evidence: "I run an MCP review agent.", source_ids: [c[0][0]] },
+      { index: 1, match: "strong", evidence: "Invented.", source_ids: ["not-a-retrieved-id"] },
+      { index: 2, match: "strong", evidence: "Working familiarity with Kubernetes.", source_ids: [fam] },
+      { index: 3, match: "partial", evidence: "Adjacent.", source_ids: [] },
+    ] };
+  }, calls) });
+  eq(calls.filter((b) => b.generationConfig && b.generationConfig.responseSchema).length, 2, "two structured-output calls");
+  assert(calls[0].contents[0].parts[0].text.includes("<<<\n" + JD), "JD passed as delimited data");
+  assert(cands[2].some((id) => id.startsWith("familiarity-")), "Kubernetes retrieves the working-familiarity passage");
+  eq(r.requirements.map((x) => x.match).join(","), "strong,gap,partial,gap");
+  eq(r.requirements[0].sources[0].id, cands[0][0]);
+  eq(r.requirements[1].sources.length, 0, "uncited claim becomes a gap");
+  eq(r.requirements[2].kind, "nice");
+  eq(JSON.stringify(r.counts), JSON.stringify({ strong: 1, partial: 1, gap: 2 }));
+  eq(r.summary, "Strong on agents.");
+});
+await test("fit: no requirements found, and caps on requirements and lengths", async () => {
+  const none = await assessFit({ jd: JD, index, env, fetchImpl: mockFit([], () => ({})) });
+  eq(none.requirements.length, 0); assert(/couldn't find/.test(none.summary));
+  const many = Array.from({ length: 15 }, (_, i) => ({ requirement: "Skill " + i, kind: "must" }));
+  const capped = await assessFit({ jd: JD, index, env, fetchImpl: mockFit(many, () => ({ summary: "", results: [] })) });
+  eq(capped.requirements.length, 10); assert(capped.requirements.every((x) => x.match === "gap"), "missing verdicts are gaps");
+  const E = { ...env, ASSETS: assets };
+  const fitReq = (jd) => req("/api/fit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jd }) });
+  eq((await handle(fitReq("too short"), E, mockFit([], () => ({})))).status, 400);
+  eq((await handle(fitReq("x".repeat(JD_MAX + 1)), E, mockFit([], () => ({})))).status, 400);
+  eq((await handle(fitReq(JD), { ASSETS: assets }, mockFit([], () => ({})))).status, 503);
+  eq((await handle(req("/api/fit"), E, mockFit([], () => ({})))).status, 405);
+  eq((await handle(fitReq(JD), E, async () => new Response("quota", { status: 429 }))).status, 429);
+  const ok = await handle(fitReq(JD), E, mockFit([{ requirement: "PostgreSQL", kind: "must" }],
+    (c) => ({ summary: "Good.", results: [{ index: 0, match: "strong", evidence: "Yes.", source_ids: [c[0][0]] }] })));
+  eq(ok.status, 200);
+  const data = await ok.json();
+  eq(data.requirements[0].match, "strong"); assert(JD_MIN <= JD.length);
 });
 await test("job-site text fits every limit and only names skills the profile evidences", () => {
   const l = buildListings(PROFILE);

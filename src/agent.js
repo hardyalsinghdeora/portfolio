@@ -4,7 +4,8 @@
 
 import { search } from "./rag.js";
 
-const GENERATE_API = "https://generativelanguage.googleapis.com/v1beta/models/";
+export const GENERATE_API = "https://generativelanguage.googleapis.com/v1beta/models/";
+export const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 export const MAX_STEPS = 4;     // model calls per question, including the final answer
 const MAX_SOURCES = 5;
 
@@ -91,7 +92,7 @@ export async function runTool(name, args, ctx) {
 }
 
 async function generate(env, contents, mode, fetchImpl) {
-  const model = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+  const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },

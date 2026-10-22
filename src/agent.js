@@ -91,6 +91,37 @@ export async function runTool(name, args, ctx) {
   return { result: { error: "unknown tool " + name }, sources: [] };
 }
 
+// --- usage: tokens, latency and cost ------------------------------------------------------
+
+// Gemini reports token counts on every response. Thinking tokens are billed as output.
+export function usageOf(data) {
+  const u = (data && data.usageMetadata) || {};
+  return { input: u.promptTokenCount || 0, output: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0) };
+}
+
+// A running total for one request. Embedding calls aren't included: the API reports no usage.
+export function newUsage(env) {
+  return { model: env.GEMINI_MODEL || DEFAULT_MODEL, calls: 0, input_tokens: 0, output_tokens: 0, ms: 0, cost_usd: null, started: Date.now() };
+}
+
+export function addUsage(total, call) {
+  total.calls++;
+  total.input_tokens += call.input;
+  total.output_tokens += call.output;
+}
+
+// Cost needs prices, which change: set GEMINI_PRICE_INPUT and GEMINI_PRICE_OUTPUT (USD per 1M
+// tokens, from Google's pricing page). Without them cost_usd stays null rather than guessing.
+export function finishUsage(total, env) {
+  const pin = parseFloat(env.GEMINI_PRICE_INPUT), pout = parseFloat(env.GEMINI_PRICE_OUTPUT);
+  const { started, ...out } = total;
+  out.ms = Date.now() - started;
+  if (Number.isFinite(pin) && Number.isFinite(pout)) {
+    out.cost_usd = Math.round((total.input_tokens * pin + total.output_tokens * pout) / 1e6 * 1e7) / 1e7;
+  }
+  return out;
+}
+
 async function generate(env, contents, mode, fetchImpl) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
@@ -112,11 +143,12 @@ async function generate(env, contents, mode, fetchImpl) {
   }
   const data = await res.json();
   const content = data.candidates && data.candidates[0] && data.candidates[0].content;
-  return content || { role: "model", parts: [] };
+  return { content: content || { role: "model", parts: [] }, usage: usageOf(data) };
 }
 
 // turns: [{ role: "user" | "assistant", content }], already validated.
-// Returns { text, sources, steps, retrieval }.
+// Returns { text, sources, steps, retrieval, usage, seen }. seen lists every passage id the model
+// was shown (sources is capped for display); the eval's faithfulness judge needs all of them.
 export async function runAgent({ turns, index, profile, env, fetchImpl = fetch }) {
   const ctx = { index, profile, env, fetchImpl, retrieval: null };
   const contents = turns.map((t) => ({
@@ -125,22 +157,22 @@ export async function runAgent({ turns, index, profile, env, fetchImpl = fetch }
   }));
   const steps = [];
   const sources = new Map();
+  const seen = new Set();
+  const usage = newUsage(env);
+  const done = (text, srcs) => ({ text, sources: srcs, steps, retrieval: ctx.retrieval || "none", usage: finishUsage(usage, env), seen: [...seen] });
 
   for (let step = 0; step < MAX_STEPS; step++) {
     // Step 1 must look something up, the last step must answer, and the model decides in between.
     const mode = step === 0 ? "ANY" : step === MAX_STEPS - 1 ? "NONE" : "AUTO";
-    const content = await generate(env, contents, mode, fetchImpl);
+    const { content, usage: callUsage } = await generate(env, contents, mode, fetchImpl);
+    addUsage(usage, callUsage);
     const parts = content.parts || [];
     const calls = parts.filter((p) => p.functionCall);
     const text = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("").trim();
 
     if (!calls.length) {
-      return {
-        text: text || "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.",
-        sources: [...sources.values()].slice(0, MAX_SOURCES),
-        steps,
-        retrieval: ctx.retrieval || "none",
-      };
+      return done(text || "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.",
+        [...sources.values()].slice(0, MAX_SOURCES));
     }
 
     // Keep the model's turn verbatim: Gemini needs its thought signatures echoed back.
@@ -150,11 +182,12 @@ export async function runAgent({ turns, index, profile, env, fetchImpl = fetch }
       const { name, args, id } = p.functionCall;
       const { result, sources: found } = await runTool(name, args || {}, ctx);
       for (const s of found) if (!sources.has(s.id)) sources.set(s.id, s);
+      for (const ps of (result && result.passages) || []) seen.add(ps.id);
       steps.push({ tool: name, args: args || {}, found: found.map((s) => s.title) });
       responses.push({ functionResponse: { ...(id ? { id } : {}), name, response: result } });
     }
     contents.push({ role: "user", parts: responses });
   }
   // Unreachable in practice: the final step runs with tools disabled.
-  return { text: "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.", sources: [], steps, retrieval: ctx.retrieval || "none" };
+  return done("I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.", []);
 }

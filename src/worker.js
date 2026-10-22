@@ -5,7 +5,9 @@
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
 // Optional: GEMINI_MODEL, GEMINI_EMBED_MODEL, RAG_EMBEDDINGS=off (BM25 only),
-//           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts)
+//           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts),
+//           USAGE_AE (Workers Analytics Engine binding: one data point per answer, for cost and latency),
+//           GEMINI_PRICE_INPUT / GEMINI_PRICE_OUTPUT (USD per 1M tokens, to report cost)
 //
 // Response format of /api/ask: the answer as plain text, then the record separator U+001E,
 // then a JSON object { sources, steps, retrieval }. Older pages simply show the text part.
@@ -86,7 +88,8 @@ async function ask(request, env, fetchImpl) {
     return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });
   }
   await countSource(env, request, "ask", body.ref);
-  const meta = { sources: result.sources, steps: result.steps, retrieval: result.retrieval };
+  recordUsage(env, "ask", result.usage, result.retrieval, body.ref);
+  const meta = { sources: result.sources, steps: result.steps, retrieval: result.retrieval, usage: result.usage };
   return new Response(result.text + SEP + JSON.stringify(meta), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
   });
@@ -112,6 +115,7 @@ async function fit(request, env, fetchImpl) {
   }
   // The description itself is never stored or logged.
   await countSource(env, request, "fit", body.ref);
+  recordUsage(env, "fit", result.usage, result.retrieval, body.ref);
   return json(200, result);
 }
 
@@ -174,6 +178,25 @@ export async function countSource(env, request, kind, ref) {
     await env.RATE_KV.put(key, String(n + 1));
   } catch (err) {
     console.warn("source count failed:", err && err.message);
+  }
+}
+
+// One structured log line per answer (visible in the Pages real-time logs), plus a data point in
+// Workers Analytics Engine when USAGE_AE is bound. Neither touches KV, so tracking costs no writes.
+// Query: SELECT blob1 AS kind, quantileWeighted(0.5)(double1, _sample_interval) AS p50_ms,
+//        SUM(double2 * _sample_interval) AS input_tokens ... FROM <dataset> GROUP BY kind
+export function recordUsage(env, kind, usage, retrieval, ref) {
+  if (!usage) return;
+  console.log(JSON.stringify({ event: kind, model: usage.model, calls: usage.calls, ms: usage.ms,
+    input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: usage.cost_usd, retrieval }));
+  try {
+    if (env.USAGE_AE) env.USAGE_AE.writeDataPoint({
+      indexes: [kind],
+      blobs: [kind, usage.model, retrieval || "none", SOURCES.includes(ref) ? ref : ""],
+      doubles: [usage.ms, usage.input_tokens, usage.output_tokens, usage.calls, usage.cost_usd || 0],
+    });
+  } catch (err) {
+    console.warn("usage data point failed:", err && err.message);
   }
 }
 

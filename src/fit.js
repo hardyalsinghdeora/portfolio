@@ -5,7 +5,7 @@
 // claimed without a cited passage, or upgraded from working familiarity to production.
 
 import { search } from "./rag.js";
-import { GENERATE_API, DEFAULT_MODEL } from "./agent.js";
+import { GENERATE_API, DEFAULT_MODEL, usageOf, newUsage, addUsage, finishUsage } from "./agent.js";
 
 export const JD_MIN = 80;
 export const JD_MAX = 8000;
@@ -70,7 +70,7 @@ const JUDGE_SCHEMA = {
   required: ["summary", "results"],
 };
 
-async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl) {
+async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
     method: "POST",
@@ -88,6 +88,7 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
     throw err;
   }
   const data = await res.json();
+  addUsage(usage, usageOf(data));
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   const out = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("");
   try {
@@ -99,17 +100,18 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
   }
 }
 
-// Returns { summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval }.
+// Returns { summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval, usage }.
 export async function assessFit({ jd, index, env, fetchImpl = fetch }) {
+  const usage = newUsage(env);
   const extracted = await generateJSON(env, EXTRACT_SYSTEM, "Job description:\n<<<\n" + jd + "\n>>>",
-    EXTRACT_SCHEMA, 1024, fetchImpl);
+    EXTRACT_SCHEMA, 1024, fetchImpl, usage);
   const requirements = (Array.isArray(extracted.requirements) ? extracted.requirements : [])
     .map((r) => ({ requirement: String((r && r.requirement) || "").trim().slice(0, 160), kind: r && r.kind === "nice" ? "nice" : "must" }))
     .filter((r) => r.requirement)
     .slice(0, MAX_REQUIREMENTS);
   if (!requirements.length) {
     return { summary: "I couldn't find concrete requirements in that text. Paste the full job description, including its requirements section.",
-      requirements: [], counts: { strong: 0, partial: 0, gap: 0 }, retrieval: "none" };
+      requirements: [], counts: { strong: 0, partial: 0, gap: 0 }, retrieval: "none", usage: finishUsage(usage, env) };
   }
 
   // Evidence per requirement, deduplicated into one numbered passage list for the judge.
@@ -126,7 +128,7 @@ export async function assessFit({ jd, index, env, fetchImpl = fetch }) {
     [...passages.values()].map((h) => `[${h.id}] ${h.text}`).join("\n\n") +
     "\n\nRequirements (index. kind: requirement; candidate passages):\n" +
     requirements.map((r, i) => `${i}. ${r.kind}: ${r.requirement}; candidates: ${candidates[i].join(", ") || "none"}`).join("\n");
-  const judged = await generateJSON(env, JUDGE_SYSTEM, prompt, JUDGE_SCHEMA, 2048, fetchImpl);
+  const judged = await generateJSON(env, JUDGE_SYSTEM, prompt, JUDGE_SCHEMA, 2048, fetchImpl, usage);
   const byIndex = new Map((Array.isArray(judged.results) ? judged.results : []).map((r) => [Number(r && r.index), r]));
 
   const counts = { strong: 0, partial: 0, gap: 0 };
@@ -151,5 +153,5 @@ export async function assessFit({ jd, index, env, fetchImpl = fetch }) {
       sources: match === "gap" ? [] : ids.map((id) => ({ id, title: passages.get(id).title })),
     };
   });
-  return { summary: String(judged.summary || "").trim().slice(0, 800), requirements: out, counts, retrieval };
+  return { summary: String(judged.summary || "").trim().slice(0, 800), requirements: out, counts, retrieval, usage: finishUsage(usage, env) };
 }

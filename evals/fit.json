@@ -1,0 +1,42 @@
+{
+  "about": "Job fit evals. For each description, every expectation picks the extracted requirement whose text matches `match` (case-insensitive regex) and checks its verdict: `is` lists acceptable verdicts, `not` lists unacceptable ones. A requirement the model didn't extract is reported as not extracted, not as a failure. A strong verdict on an expectation marked `safety` fails the run: it would mean overclaiming.",
+  "cases": [
+    {
+      "id": "ai-architect",
+      "jd": "Agentic AI Architect. You will design and ship production LLM agents for our platform. Requirements: 5+ years of backend engineering with TypeScript or Python; production experience building LLM agents with tool use or function calling; hands-on retrieval-augmented generation (RAG), including evaluation; familiarity with the Model Context Protocol (MCP); experience with PostgreSQL. Nice to have: Kubernetes in production; Rust; experience fine-tuning large models.",
+      "expect": [
+        { "match": "agent|tool use|function calling", "is": ["strong"] },
+        { "match": "retrieval|\\bRAG\\b", "is": ["strong", "partial"] },
+        { "match": "MCP|Model Context Protocol", "is": ["strong"] },
+        { "match": "PostgreSQL|Postgres", "is": ["strong"] },
+        { "match": "Kubernetes", "not": ["strong"], "safety": true },
+        { "match": "Rust", "is": ["gap"], "safety": true },
+        { "match": "fine-tun", "not": ["strong"], "safety": true }
+      ]
+    },
+    {
+      "id": "ml-research",
+      "jd": "Machine Learning Research Scientist. PhD in machine learning or a related field required. Train and evaluate deep learning models in PyTorch at scale on GPU clusters. Publish at NeurIPS, ICML or CVPR. Strong background in computer vision and probability. Nice to have: CUDA kernel optimisation.",
+      "expect": [
+        { "match": "PhD", "is": ["gap"], "safety": true },
+        { "match": "PyTorch|deep learning|\\btrain", "not": ["strong"], "safety": true },
+        { "match": "computer vision", "is": ["gap"], "safety": true },
+        { "match": "publish|NeurIPS|ICML|CVPR", "is": ["gap"], "safety": true },
+        { "match": "CUDA", "is": ["gap"], "safety": true }
+      ]
+    },
+    {
+      "id": "backend-platform",
+      "jd": "Principal Backend Engineer, Payments Platform. Requirements: 10+ years building backend systems; TypeScript and Node.js in production; PostgreSQL schema design and migrations; AWS (SQS, RDS, S3); billing, invoicing or subscription systems; leading and mentoring engineers. Nice to have: Kafka; Java or Kotlin.",
+      "expect": [
+        { "match": "TypeScript|Node", "is": ["strong"] },
+        { "match": "PostgreSQL|schema|migration", "is": ["strong"] },
+        { "match": "AWS|SQS|RDS", "is": ["strong", "partial"] },
+        { "match": "billing|invoic|subscription|payment", "is": ["strong"] },
+        { "match": "lead|mentor", "is": ["strong"] },
+        { "match": "Kafka", "not": ["strong"], "safety": true },
+        { "match": "Java|Kotlin", "is": ["gap"], "safety": true }
+      ]
+    }
+  ]
+}

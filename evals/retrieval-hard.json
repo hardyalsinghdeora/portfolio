@@ -1,0 +1,22 @@
+[
+  { "q": "Have you ever been in charge of people?", "expect": ["qa-team_size_led", "exp-", "principles", "metrics"] },
+  { "q": "Can you keep a language model from making things up?", "expect": ["genai-hallucination_control", "agentic-practices-safety"] },
+  { "q": "How do you keep model bills down?", "expect": ["genai-llm_cost_control", "agentic-guardrails", "agentic-practices-safety"] },
+  { "q": "Moving data between two databases while customers keep using the product", "expect": ["migration-", "system-1", "qa-migrations_led"] },
+  { "q": "Replacing an old app piece by piece instead of a big-bang rewrite", "expect": ["modernise-", "qa-migrations_led"] },
+  { "q": "Where are you willing to work from?", "expect": ["availability", "qa-location_preference"] },
+  { "q": "How soon could you start?", "expect": ["availability", "qa-notice_period"] },
+  { "q": "Which university did you go to?", "expect": ["education"] },
+  { "q": "Have you worked with speech or voice AI?", "expect": ["agentic-guardrails", "skills-ai_automation", "current-focus"] },
+  { "q": "Do you know container orchestration?", "expect": ["familiarity-infra", "skills-cloud_delivery"] },
+  { "q": "Which graph-based agent frameworks have you tried?", "expect": ["familiarity-ai"] },
+  { "q": "Getting machine-readable output from a model reliably", "expect": ["agentic-practices-output", "skills-ai_automation", "genai-"] },
+  { "q": "How do you know the search over your profile actually works?", "expect": ["agentic-rag", "genai-evaluation_approach", "project-0"] },
+  { "q": "What's the most impactful thing you've shipped?", "expect": ["qa-biggest_achievement", "migration-", "metrics", "system-1"] },
+  { "q": "Experience with invoices, recurring plans and discounts", "expect": ["system-0", "skills-commerce_billing", "exp-0"] },
+  { "q": "Permissions and roles across many services", "expect": ["system-3", "skills-architecture"] },
+  { "q": "Open-source tools that make coding assistants safer", "expect": ["project-1", "agentic-guardrails"] },
+  { "q": "Where did your career start?", "expect": ["exp-6", "exp-5"] },
+  { "q": "How does the bot on this page decide what to look up?", "expect": ["agentic-rag", "project-0", "agentic-overview", "agentic-practices-safety"] },
+  { "q": "Can an agent of yours touch production data?", "expect": ["agentic-guardrails", "genai-agent_safety_and_guardrails", "project-1"] }
+]

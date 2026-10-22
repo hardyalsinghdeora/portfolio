@@ -846,6 +846,16 @@ body.chatting .dock{display:block}
 
   var LIVE_FU = ['How do you build AI agents?','What systems have you built?','How do I get in touch?'];
 
+  // "1.6 s · 2,140 tokens · $0.0004": what an answer cost to produce. Cost shows only when the
+  // server has prices configured; it never guesses.
+  function usageText(u) {
+    if (!u || !u.ms) return '';
+    var parts = [(u.ms / 1000).toFixed(1) + ' s', (u.input_tokens + u.output_tokens).toLocaleString('en-US') + ' tokens',
+      u.calls + ' model call' + (u.calls === 1 ? '' : 's')];
+    if (typeof u.cost_usd === 'number') parts.push(u.cost_usd < 0.0001 ? '<$0.0001' : '$' + u.cost_usd.toFixed(4));
+    return parts.join(' &#183; ');
+  }
+
   // Sources the agent retrieved, and a collapsible trace of the tool calls it made.
   function metaHTML(meta) {
     if (!meta || !meta.sources || !meta.sources.length) return '';
@@ -854,7 +864,7 @@ body.chatting .dock{display:block}
       meta.sources.map(function (s) { return '<span class="src">' + esc(String(s.title || s.id)) + '</span>'; }).join('') + '</div>';
     if (meta.steps && meta.steps.length) {
       html += '<details class="trace"><summary>How the agent answered: ' + meta.steps.length + ' tool call' +
-        (meta.steps.length === 1 ? '' : 's') + ', ' + mode + '</summary><ol>' +
+        (meta.steps.length === 1 ? '' : 's') + ', ' + mode + (usageText(meta.usage) ? ' &#183; ' + usageText(meta.usage) : '') + '</summary><ol>' +
         meta.steps.map(function (st) {
           var args = st.args && (st.args.query || st.args.section) ? ' &#8220;' + esc(String(st.args.query || st.args.section)) + '&#8221;' : '';
           return '<li><code>' + esc(String(st.tool)) + '</code>' + args +
@@ -1051,7 +1061,7 @@ body.chatting .dock{display:block}
       }).join('') + '</ul>';
     }
     var mode = d.retrieval === 'hybrid' ? 'hybrid RAG (BM25 + embeddings)' : 'keyword RAG (BM25)';
-    html += '<div class="note">Checked against my written profile with ' + mode + '. A match needs a cited passage; anything I know only at a working level is marked partial. ' +
+    html += '<div class="note">Checked against my written profile with ' + mode + (usageText(d.usage) ? ' (' + usageText(d.usage) + ')' : '') + '. A match needs a cited passage; anything I know only at a working level is marked partial. ' +
       '<a href="mailto:hardyalsinghdeora@gmail.com?subject=A%20role%20that%20may%20fit" style="color:var(--accent)">Email me about this role</a>.</div>' +
       '<div class="followups"><button class="fu" data-fit="1">Check another role</button><button class="fu" data-q="How do I get in touch?">How do I get in touch?</button></div>';
     var slot = turn.querySelector('.answer');

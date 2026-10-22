@@ -1,0 +1,60 @@
+# Nightly evals against the live Gemini API: answer checks, LLM-judged faithfulness, job-fit
+# verdicts, and retrieval in both BM25 and hybrid modes, with latency, tokens and cost.
+# Separate from deploy on purpose: it costs real calls and the model is non-deterministic, so it
+# reports and alerts instead of blocking a release. The run goes red on any safety failure
+# (compensation, familiarity, ownership, injection, confidential names) or job-fit overclaim.
+#
+# One-time setup (repo > Settings > Secrets and variables > Actions):
+#   GEMINI_API_KEY        secret; can be the same key the Pages project uses
+#   GEMINI_PRICE_INPUT    optional variable, USD per 1M input tokens, to report cost
+#   GEMINI_PRICE_OUTPUT   optional variable, USD per 1M output tokens
+#   EVAL_JUDGE_MODEL      optional variable, a different model to judge faithfulness
+name: Evals
+
+on:
+  schedule:
+    - cron: "23 1 * * *"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Only answer cases whose id matches this regex (blank = full run)"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build knowledge module
+        run: node scripts/build.mjs
+
+      - name: Run evals
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_PRICE_INPUT: ${{ vars.GEMINI_PRICE_INPUT }}
+          GEMINI_PRICE_OUTPUT: ${{ vars.GEMINI_PRICE_OUTPUT }}
+          EVAL_JUDGE_MODEL: ${{ vars.EVAL_JUDGE_MODEL }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          if [ -n "$ONLY" ]; then node scripts/eval.mjs --only "$ONLY"; else node scripts/eval.mjs; fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: evals/results/
+          if-no-files-found: ignore

@@ -1054,6 +1054,37 @@ async function runTool(name, args, ctx) {
   return { result: { error: "unknown tool " + name }, sources: [] };
 }
 
+// --- usage: tokens, latency and cost ------------------------------------------------------
+
+// Gemini reports token counts on every response. Thinking tokens are billed as output.
+function usageOf(data) {
+  const u = (data && data.usageMetadata) || {};
+  return { input: u.promptTokenCount || 0, output: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0) };
+}
+
+// A running total for one request. Embedding calls aren't included: the API reports no usage.
+function newUsage(env) {
+  return { model: env.GEMINI_MODEL || DEFAULT_MODEL, calls: 0, input_tokens: 0, output_tokens: 0, ms: 0, cost_usd: null, started: Date.now() };
+}
+
+function addUsage(total, call) {
+  total.calls++;
+  total.input_tokens += call.input;
+  total.output_tokens += call.output;
+}
+
+// Cost needs prices, which change: set GEMINI_PRICE_INPUT and GEMINI_PRICE_OUTPUT (USD per 1M
+// tokens, from Google's pricing page). Without them cost_usd stays null rather than guessing.
+function finishUsage(total, env) {
+  const pin = parseFloat(env.GEMINI_PRICE_INPUT), pout = parseFloat(env.GEMINI_PRICE_OUTPUT);
+  const { started, ...out } = total;
+  out.ms = Date.now() - started;
+  if (Number.isFinite(pin) && Number.isFinite(pout)) {
+    out.cost_usd = Math.round((total.input_tokens * pin + total.output_tokens * pout) / 1e6 * 1e7) / 1e7;
+  }
+  return out;
+}
+
 async function generate(env, contents, mode, fetchImpl) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
@@ -1075,11 +1106,12 @@ async function generate(env, contents, mode, fetchImpl) {
   }
   const data = await res.json();
   const content = data.candidates && data.candidates[0] && data.candidates[0].content;
-  return content || { role: "model", parts: [] };
+  return { content: content || { role: "model", parts: [] }, usage: usageOf(data) };
 }
 
 // turns: [{ role: "user" | "assistant", content }], already validated.
-// Returns { text, sources, steps, retrieval }.
+// Returns { text, sources, steps, retrieval, usage, seen }. seen lists every passage id the model
+// was shown (sources is capped for display); the eval's faithfulness judge needs all of them.
 async function runAgent({ turns, index, profile, env, fetchImpl = fetch }) {
   const ctx = { index, profile, env, fetchImpl, retrieval: null };
   const contents = turns.map((t) => ({
@@ -1088,22 +1120,22 @@ async function runAgent({ turns, index, profile, env, fetchImpl = fetch }) {
   }));
   const steps = [];
   const sources = new Map();
+  const seen = new Set();
+  const usage = newUsage(env);
+  const done = (text, srcs) => ({ text, sources: srcs, steps, retrieval: ctx.retrieval || "none", usage: finishUsage(usage, env), seen: [...seen] });
 
   for (let step = 0; step < MAX_STEPS; step++) {
     // Step 1 must look something up, the last step must answer, and the model decides in between.
     const mode = step === 0 ? "ANY" : step === MAX_STEPS - 1 ? "NONE" : "AUTO";
-    const content = await generate(env, contents, mode, fetchImpl);
+    const { content, usage: callUsage } = await generate(env, contents, mode, fetchImpl);
+    addUsage(usage, callUsage);
     const parts = content.parts || [];
     const calls = parts.filter((p) => p.functionCall);
     const text = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("").trim();
 
     if (!calls.length) {
-      return {
-        text: text || "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.",
-        sources: [...sources.values()].slice(0, MAX_SOURCES),
-        steps,
-        retrieval: ctx.retrieval || "none",
-      };
+      return done(text || "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.",
+        [...sources.values()].slice(0, MAX_SOURCES));
     }
 
     // Keep the model's turn verbatim: Gemini needs its thought signatures echoed back.
@@ -1113,13 +1145,14 @@ async function runAgent({ turns, index, profile, env, fetchImpl = fetch }) {
       const { name, args, id } = p.functionCall;
       const { result, sources: found } = await runTool(name, args || {}, ctx);
       for (const s of found) if (!sources.has(s.id)) sources.set(s.id, s);
+      for (const ps of (result && result.passages) || []) seen.add(ps.id);
       steps.push({ tool: name, args: args || {}, found: found.map((s) => s.title) });
       responses.push({ functionResponse: { ...(id ? { id } : {}), name, response: result } });
     }
     contents.push({ role: "user", parts: responses });
   }
   // Unreachable in practice: the final step runs with tools disabled.
-  return { text: "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.", sources: [], steps, retrieval: ctx.retrieval || "none" };
+  return done("I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.", []);
 }
 
 
@@ -1194,7 +1227,7 @@ const JUDGE_SCHEMA = {
   required: ["summary", "results"],
 };
 
-async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl) {
+async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
     method: "POST",
@@ -1212,6 +1245,7 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
     throw err;
   }
   const data = await res.json();
+  addUsage(usage, usageOf(data));
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   const out = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("");
   try {
@@ -1223,17 +1257,18 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
   }
 }
 
-// Returns { summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval }.
+// Returns { summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval, usage }.
 async function assessFit({ jd, index, env, fetchImpl = fetch }) {
+  const usage = newUsage(env);
   const extracted = await generateJSON(env, EXTRACT_SYSTEM, "Job description:\n<<<\n" + jd + "\n>>>",
-    EXTRACT_SCHEMA, 1024, fetchImpl);
+    EXTRACT_SCHEMA, 1024, fetchImpl, usage);
   const requirements = (Array.isArray(extracted.requirements) ? extracted.requirements : [])
     .map((r) => ({ requirement: String((r && r.requirement) || "").trim().slice(0, 160), kind: r && r.kind === "nice" ? "nice" : "must" }))
     .filter((r) => r.requirement)
     .slice(0, MAX_REQUIREMENTS);
   if (!requirements.length) {
     return { summary: "I couldn't find concrete requirements in that text. Paste the full job description, including its requirements section.",
-      requirements: [], counts: { strong: 0, partial: 0, gap: 0 }, retrieval: "none" };
+      requirements: [], counts: { strong: 0, partial: 0, gap: 0 }, retrieval: "none", usage: finishUsage(usage, env) };
   }
 
   // Evidence per requirement, deduplicated into one numbered passage list for the judge.
@@ -1250,7 +1285,7 @@ async function assessFit({ jd, index, env, fetchImpl = fetch }) {
     [...passages.values()].map((h) => `[${h.id}] ${h.text}`).join("\n\n") +
     "\n\nRequirements (index. kind: requirement; candidate passages):\n" +
     requirements.map((r, i) => `${i}. ${r.kind}: ${r.requirement}; candidates: ${candidates[i].join(", ") || "none"}`).join("\n");
-  const judged = await generateJSON(env, JUDGE_SYSTEM, prompt, JUDGE_SCHEMA, 2048, fetchImpl);
+  const judged = await generateJSON(env, JUDGE_SYSTEM, prompt, JUDGE_SCHEMA, 2048, fetchImpl, usage);
   const byIndex = new Map((Array.isArray(judged.results) ? judged.results : []).map((r) => [Number(r && r.index), r]));
 
   const counts = { strong: 0, partial: 0, gap: 0 };
@@ -1275,7 +1310,7 @@ async function assessFit({ jd, index, env, fetchImpl = fetch }) {
       sources: match === "gap" ? [] : ids.map((id) => ({ id, title: passages.get(id).title })),
     };
   });
-  return { summary: String(judged.summary || "").trim().slice(0, 800), requirements: out, counts, retrieval };
+  return { summary: String(judged.summary || "").trim().slice(0, 800), requirements: out, counts, retrieval, usage: finishUsage(usage, env) };
 }
 
 
@@ -1287,7 +1322,9 @@ async function assessFit({ jd, index, env, fetchImpl = fetch }) {
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
 // Optional: GEMINI_MODEL, GEMINI_EMBED_MODEL, RAG_EMBEDDINGS=off (BM25 only),
-//           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts)
+//           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts),
+//           USAGE_AE (Workers Analytics Engine binding: one data point per answer, for cost and latency),
+//           GEMINI_PRICE_INPUT / GEMINI_PRICE_OUTPUT (USD per 1M tokens, to report cost)
 //
 // Response format of /api/ask: the answer as plain text, then the record separator U+001E,
 // then a JSON object { sources, steps, retrieval }. Older pages simply show the text part.
@@ -1364,7 +1401,8 @@ async function ask(request, env, fetchImpl) {
     return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });
   }
   await countSource(env, request, "ask", body.ref);
-  const meta = { sources: result.sources, steps: result.steps, retrieval: result.retrieval };
+  recordUsage(env, "ask", result.usage, result.retrieval, body.ref);
+  const meta = { sources: result.sources, steps: result.steps, retrieval: result.retrieval, usage: result.usage };
   return new Response(result.text + SEP + JSON.stringify(meta), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
   });
@@ -1390,6 +1428,7 @@ async function fit(request, env, fetchImpl) {
   }
   // The description itself is never stored or logged.
   await countSource(env, request, "fit", body.ref);
+  recordUsage(env, "fit", result.usage, result.retrieval, body.ref);
   return json(200, result);
 }
 
@@ -1452,6 +1491,25 @@ async function countSource(env, request, kind, ref) {
     await env.RATE_KV.put(key, String(n + 1));
   } catch (err) {
     console.warn("source count failed:", err && err.message);
+  }
+}
+
+// One structured log line per answer (visible in the Pages real-time logs), plus a data point in
+// Workers Analytics Engine when USAGE_AE is bound. Neither touches KV, so tracking costs no writes.
+// Query: SELECT blob1 AS kind, quantileWeighted(0.5)(double1, _sample_interval) AS p50_ms,
+//        SUM(double2 * _sample_interval) AS input_tokens ... FROM <dataset> GROUP BY kind
+function recordUsage(env, kind, usage, retrieval, ref) {
+  if (!usage) return;
+  console.log(JSON.stringify({ event: kind, model: usage.model, calls: usage.calls, ms: usage.ms,
+    input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: usage.cost_usd, retrieval }));
+  try {
+    if (env.USAGE_AE) env.USAGE_AE.writeDataPoint({
+      indexes: [kind],
+      blobs: [kind, usage.model, retrieval || "none", SOURCES.includes(ref) ? ref : ""],
+      doubles: [usage.ms, usage.input_tokens, usage.output_tokens, usage.calls, usage.cost_usd || 0],
+    });
+  } catch (err) {
+    console.warn("usage data point failed:", err && err.message);
   }
 }
 

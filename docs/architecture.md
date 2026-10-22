@@ -53,6 +53,15 @@ Constraints: Cloudflare Pages free tier, deployment by dashboard drag-and-drop (
 
 Adding the working-familiarity chunks first regressed one question ("What are you working on right now?" matched the word "working"). The eval caught it, and a synonym for "now" / "currently" fixed it. That's the reason to keep the eval in the build. `npm test` runs it headlessly, and CI won't deploy unless it passes. Expanding the set for Gen AI questions surfaced two more stemming gaps ("backfill" vs "backfilled", "safe" vs "safety"), and both were fixed with synonyms.
 
+That eval only measured retrieval, on BM25. It saturated (49/49), and it never touched the hybrid path visitors actually get or the model's answers. A nightly live-model eval (`scripts/eval.mjs`, `evals/`) now covers both:
+
+- deterministic answer checks;
+- an LLM judge for faithfulness to the passages the agent saw;
+- expected verdicts on three job descriptions;
+- BM25 and hybrid retrieval on the original set plus 20 deliberately hard paraphrases.
+
+It fails only on safety failures and overclaims; everything else is a trend to watch, not a gate. Every answer now also reports its model calls, tokens, latency and (with prices configured) cost.
+
 Next:
-- add an LLM-as-judge pass on answer faithfulness;
-- log anonymised retrieval misses, the questions where the top score is low, to grow the eval set.
+- log anonymised retrieval misses, the questions where the top score is low, to grow the eval set;
+- collect visitor feedback on answers and turn it into eval cases.

@@ -28,10 +28,10 @@
 <script type="module">
 import { PROFILE } from "../src/knowledge.js";
 import { buildChunks, buildIndex, bm25, search, rrf, tokenize } from "../src/rag.js";
-import { runAgent, MAX_STEPS } from "../src/agent.js";
+import { runAgent, MAX_STEPS, SYSTEM } from "../src/agent.js";
 import { handle, validTurns, SEP, recordUsage } from "../src/worker.js";
 import { assessFit, JD_MIN, JD_MAX } from "../src/fit.js";
-import { PHONE, REDLINES } from "../evals/redlines.mjs";
+import { PHONE, REDLINES, COMPENSATION, guardText, LEAK_WORDS } from "../src/guard.js";
 import { checkAnswer, runEvals, scorecardMarkdown, failed as runFailed } from "../evals/harness.mjs";
 import { buildListings, listingsMarkdown, LIMITS } from "../scripts/listings.mjs";
 
@@ -97,7 +97,7 @@ await test("case_studies section covers every migration", () => {
 await test("agentic AI section is indexed", () => {
   for (const id of ["agentic-overview", "agentic-agents", "agentic-guardrails"]) assert(chunks.some((c) => c.id === id), id);
 });
-// PHONE and REDLINES live in evals/redlines.mjs, shared with the answer evals.
+// PHONE and REDLINES live in src/guard.js, shared with the runtime guard and the answer evals.
 await test("no phone number anywhere in the public knowledge base", () => {
   assert(!PHONE.test(JSON.stringify(PROFILE)), "phone-like number found");
 });
@@ -264,6 +264,45 @@ await test("usage: tokens, latency and cost per answer, and every passage the mo
   eq(points[1].blobs[3], "", "unknown source not recorded");
   recordUsage({ USAGE_AE: { writeDataPoint: () => { throw new Error("AE down"); } } }, "ask", meta.usage, "bm25");
 });
+await test("guard: blocks leaks, and never blocks the profile's own text", () => {
+  for (const [text, reason] of [
+    ["I led the Navigator rebuild.", "redline"], ["Call me on +91 9876543210.", "phone"],
+    ["I'm expecting 40 LPA.", "compensation"], ["Around 35 lakhs.", "compensation"], ["Roughly ₹45,00,000.", "redline"],
+    ["About $120k.", "compensation"], ["$150,000 base.", "compensation"], ["INR 4500000", "compensation"],
+  ]) eq(guardText(text, [SYSTEM]), reason, text);
+  const sentence = SYSTEM.split("\n").find((l) => l.startsWith("Answer ONLY"));
+  eq(guardText("Sure. " + sentence, [SYSTEM]), "prompt_leak", "a verbatim system-prompt sentence");
+  for (const ok of ["That answer cost $0.0004.", "12+ domain services behind one gateway.", "My notice period is 30 days.",
+    "I'm happy to discuss compensation on a call.", "If the tools don't cover something I say so plainly and point you to email."]) eq(guardText(ok, [SYSTEM]), null, ok);
+  for (const c of chunks) eq(guardText(c.text, [SYSTEM]), null, "profile passage " + c.id + " would be blocked");
+  assert(LEAK_WORDS >= 12);
+});
+await test("guard: /api/ask and /api/fit replace guarded text and never return it", async () => {
+  const E = { ...env, ASSETS: assets };
+  const ask = async (text) => {
+    const res = await handle(post({ messages: turns }), E, mockGemini({ script: [
+      [{ functionCall: { name: "search_profile", args: { query: "x" } } }], [{ text }]] }));
+    const [body, meta] = (await res.text()).split(SEP);
+    return { body, meta: JSON.parse(meta) };
+  };
+  const leaked = await ask("I built the Navigator platform.");
+  assert(!leaked.body.includes("Navigator") && /hardyalsinghdeora@gmail\.com/.test(leaked.body), leaked.body);
+  eq(leaked.meta.guarded, true); eq(leaked.meta.sources.length, 0);
+  eq((await ask("Here you go: " + SYSTEM.split("\n")[0])).meta.guarded, true, "prompt leak");
+  const fine = await ask("I build bounded agents.");
+  eq(fine.body, "I build bounded agents."); assert(!("guarded" in fine.meta));
+  const fitReq = req("/api/fit", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jd: "Must have Zoho CRM experience and production LLM agents. ".repeat(3) }) });
+  const res = await handle(fitReq, E, mockFit(
+    [{ requirement: "Zoho CRM experience", kind: "must" }, { requirement: "Production LLM agents", kind: "must" }],
+    (c) => ({ summary: "Call me on 9876543210.", results: [
+      { index: 0, match: "gap", evidence: "I haven't used Zoho.", source_ids: [] },
+      { index: 1, match: "strong", evidence: "I run agents in production.", source_ids: [c[1][0]] }] })));
+  const d = await res.json();
+  eq(d.guarded, true); assert(!/9876543210/.test(d.summary) && !/Zoho/.test(d.requirements[0].evidence));
+  eq(d.requirements[0].requirement, "Zoho CRM experience", "the visitor's own requirement text is echoed as is");
+  eq(d.requirements[1].evidence, "I run agents in production.");
+});
 await test("worker: errors and guards", async () => {
   const E = { ...env, ASSETS: assets };
   eq((await handle(req("/api/ask"), E, mockGemini())).status, 405);
@@ -425,6 +464,7 @@ await test("evals: a full run catches a leaked salary, an unfaithful answer and 
     env, fetchImpl, sleep: async () => {} });
   eq(s.answers.pass, 2); eq(s.answers.byCategory.compensation.pass, 0);
   eq(s.safety.failures.length, 1); eq(s.safety.failures[0].id, "salary");
+  eq(s.guard.length, 1); eq(s.guard[0].reason, "compensation", "the guard would have caught the leaked salary");
   eq(s.faithfulness.judged, 3); eq(s.faithfulness.supported, 2, "judge caught the invented claim");
   eq(s.fit.overclaims.length, 1); eq(s.fit.notExtracted, 1);
   eq(s.retrieval.map((r) => r.mode).join(","), "bm25,bm25 (embeddings failed)");

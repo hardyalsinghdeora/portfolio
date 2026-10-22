@@ -6,7 +6,8 @@ import { PROFILE } from "../src/knowledge.js";
 import { buildChunks, buildIndex, search } from "../src/rag.js";
 import { runAgent, GENERATE_API, DEFAULT_MODEL, usageOf } from "../src/agent.js";
 import { assessFit } from "../src/fit.js";
-import { PHONE, REDLINES } from "./redlines.mjs";
+import { PHONE, REDLINES, guardText } from "../src/guard.js";
+import { SYSTEM } from "../src/agent.js";
 
 const re = (p) => new RegExp(p, "i");
 
@@ -79,7 +80,9 @@ export async function runAnswerCase(c, { index, env, fetchImpl, sleep, judge = t
       const passages = r.seen.map((id) => index.chunks.find((ch) => ch.id === id)).filter(Boolean);
       verdict = await withRetry(() => judgeAnswer({ question, answer: r.text, passages, env, fetchImpl }), sleep).catch((err) => ({ error: err.message }));
     }
-    return { id: c.id, category: c.category, question, answer: r.text, pass: fails.length === 0, fails, judge: verdict, usage: r.usage, retrieval: r.retrieval };
+    // Evals grade the model's raw text; this records whether the runtime guard would have stepped in.
+    const guard = guardText(r.text, [SYSTEM]);
+    return { id: c.id, category: c.category, question, answer: r.text, pass: fails.length === 0, fails, judge: verdict, guard, usage: r.usage, retrieval: r.retrieval };
   } catch (err) {
     return { id: c.id, category: c.category, question, error: err.message, pass: false, fails: ["error: " + err.message] };
   }
@@ -139,6 +142,7 @@ export function summarize({ answers, fits, retrieval, safetyCategories }) {
     answers: { n: answers.length, pass: answers.filter((a) => a.pass).length, byCategory: byCat },
     faithfulness: { judged: judged.length, supported: judged.filter((a) => a.judge.supported).length },
     safety: { failures: safetyFailures.map((a) => ({ id: a.id, category: a.category, fails: a.fails })) },
+    guard: answers.filter((a) => a.guard).map((a) => ({ id: a.id, reason: a.guard })),
     fit: { evaluated: evaluated.length, pass: evaluated.filter((c) => c.status === "pass").length,
       notExtracted: fitChecks.length - evaluated.length, overclaims: fitChecks.filter((c) => c.overclaim) },
     retrieval,
@@ -162,6 +166,7 @@ export function scorecardMarkdown(s, { model, date }) {
     `| Answer checks | ${s.answers.pass}/${s.answers.n} (${pct(s.answers.pass, s.answers.n)}%) |`,
     `| Faithful to retrieved passages (LLM judge) | ${s.faithfulness.supported}/${s.faithfulness.judged} (${pct(s.faithfulness.supported, s.faithfulness.judged)}%) |`,
     `| Safety failures | ${s.safety.failures.length} |`,
+    `| Runtime guard would have blocked | ${s.guard.length}${s.guard.length ? " (" + s.guard.map((g) => g.id + ": " + g.reason).join(", ") + ")" : ""} |`,
     `| Job fit verdicts as expected | ${s.fit.pass}/${s.fit.evaluated}${s.fit.notExtracted ? ` (${s.fit.notExtracted} not extracted)` : ""} |`,
     `| Job fit overclaims | ${s.fit.overclaims.length} |`,
     ...s.retrieval.map((r) => `| Retrieval, ${r.set}, ${r.mode} | hit@1 ${r.hit1}/${r.n} · hit@5 ${r.hit5}/${r.n} |`),

@@ -14,7 +14,8 @@
 
 import { PROFILE } from "./knowledge.js";
 import { buildChunks, buildIndex, search } from "./rag.js";
-import { runAgent } from "./agent.js";
+import { runAgent, SYSTEM } from "./agent.js";
+import { guardText, GUARDED_ANSWER, GUARDED_EVIDENCE } from "./guard.js";
 import { assessFit, JD_MIN, JD_MAX } from "./fit.js";
 
 const MAX_TURNS = 10;          // matches the page, which keeps the last 10 turns
@@ -88,9 +89,14 @@ async function ask(request, env, fetchImpl) {
     return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });
   }
   await countSource(env, request, "ask", body.ref);
-  recordUsage(env, "ask", result.usage, result.retrieval, body.ref);
-  const meta = { sources: result.sources, steps: result.steps, retrieval: result.retrieval, usage: result.usage };
-  return new Response(result.text + SEP + JSON.stringify(meta), {
+  // Last check before the visitor sees it. The model's text is dropped, never logged.
+  const guard = guardText(result.text, [SYSTEM]);
+  if (guard) console.warn(JSON.stringify({ event: "guard", kind: "ask", reason: guard }));
+  recordUsage(env, "ask", result.usage, result.retrieval, body.ref, guard);
+  const meta = guard
+    ? { sources: [], steps: result.steps, retrieval: result.retrieval, usage: result.usage, guarded: true }
+    : { sources: result.sources, steps: result.steps, retrieval: result.retrieval, usage: result.usage };
+  return new Response((guard ? GUARDED_ANSWER : result.text) + SEP + JSON.stringify(meta), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
   });
 }
@@ -114,8 +120,18 @@ async function fit(request, env, fetchImpl) {
     return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });
   }
   // The description itself is never stored or logged.
+  // Guard the model-written fields. Requirement text is the visitor's own job description
+  // paraphrased back to them, so it isn't checked.
+  let guard = null;
+  for (const r of result.requirements) {
+    const g = guardText(r.evidence);
+    if (g) { guard = guard || g; r.evidence = GUARDED_EVIDENCE; }
+  }
+  const g = guardText(result.summary);
+  if (g) { guard = guard || g; result.summary = GUARDED_ANSWER; }
+  if (guard) { result.guarded = true; console.warn(JSON.stringify({ event: "guard", kind: "fit", reason: guard })); }
   await countSource(env, request, "fit", body.ref);
-  recordUsage(env, "fit", result.usage, result.retrieval, body.ref);
+  recordUsage(env, "fit", result.usage, result.retrieval, body.ref, guard);
   return json(200, result);
 }
 
@@ -185,14 +201,14 @@ export async function countSource(env, request, kind, ref) {
 // Workers Analytics Engine when USAGE_AE is bound. Neither touches KV, so tracking costs no writes.
 // Query: SELECT blob1 AS kind, quantileWeighted(0.5)(double1, _sample_interval) AS p50_ms,
 //        SUM(double2 * _sample_interval) AS input_tokens ... FROM <dataset> GROUP BY kind
-export function recordUsage(env, kind, usage, retrieval, ref) {
+export function recordUsage(env, kind, usage, retrieval, ref, guard) {
   if (!usage) return;
   console.log(JSON.stringify({ event: kind, model: usage.model, calls: usage.calls, ms: usage.ms,
-    input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: usage.cost_usd, retrieval }));
+    input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: usage.cost_usd, retrieval, guard: guard || null }));
   try {
     if (env.USAGE_AE) env.USAGE_AE.writeDataPoint({
       indexes: [kind],
-      blobs: [kind, usage.model, retrieval || "none", SOURCES.includes(ref) ? ref : ""],
+      blobs: [kind, usage.model, retrieval || "none", SOURCES.includes(ref) ? ref : "", guard || ""],
       doubles: [usage.ms, usage.input_tokens, usage.output_tokens, usage.calls, usage.cost_usd || 0],
     });
   } catch (err) {

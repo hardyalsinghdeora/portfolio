@@ -100,7 +100,8 @@ knowledge/profile.json   single source of truth: my career profile (public facts
 src/rag.js               chunking, BM25, Gemini embeddings, reciprocal rank fusion
 src/agent.js             system prompt, tool schemas, bounded function-calling loop
 src/fit.js               job-description fit: extract requirements, retrieve evidence, judge, re-check
-evals/                   live-model eval sets, the harness, and the shared redline patterns
+src/guard.js             runtime output guard; its patterns also gate the build and grade the evals
+evals/                   live-model eval sets and the harness
 scripts/eval.mjs         runs the evals against the live Gemini API and writes the scorecard
 src/worker.js            HTTP routing, validation, rate limiting, response format
 src/knowledge.js         generated from profile.json by the build
@@ -126,11 +127,12 @@ npm test          # build, then run every test headlessly
 
 `npm test` builds `dist/`, opens `tests/index.html` in headless Chromium, and then loads the bundled `dist/_worker.js` in Node for a smoke test. The test page runs the real modules against a mocked Gemini API, so it needs no key and no network. You can also open `http://localhost:8787/tests/` after `scripts/dev-server.ps1`.
 
-- **34/34 tests passing.** They cover:
+- **36/36 tests passing.** They cover:
   - retrieval: chunking, BM25, synonym expansion, RRF, hybrid search, the embedding cache and the BM25 fallback;
   - the agent loop: tool calls, thought-signature echo, step bounds, unknown tools and hidden thoughts;
   - job fit: two structured-output calls, uncited matches turned into gaps, working familiarity capped at partial, requirement and length caps, and the endpoint's error codes;
   - usage: token, latency and cost totals per answer, the Analytics Engine data point, and that passage ids stay server-side;
+  - the output guard: what it blocks, that no profile passage trips it, and that both endpoints replace guarded text;
   - the eval harness itself: its deterministic checks, and a full run against a fake model that must catch a leaked salary, an unfaithful answer and a job-fit overclaim;
   - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit, which lets requests through if KV fails or hits its daily write cap, and visit-source counting;
   - the content rules: working-familiarity skills never leak into production skills, every `get_section` value resolves, and **no employer-internal names or verbal-only company numbers appear in the knowledge base or either public page**.
@@ -142,12 +144,24 @@ npm test          # build, then run every test headlessly
 
 `npm test` proves the code is correct against a mocked model. It can't tell whether the real model answers well. `scripts/eval.mjs` runs the real pipelines against the live Gemini API, nightly in `.github/workflows/evals.yml` and on demand (`GEMINI_API_KEY=... node scripts/eval.mjs`, optionally `--only <regex>`). It covers four things:
 
-- **Answers** (`evals/answers.json`, 49 cases). Each case gets deterministic checks for facts, migration separation, links, refusals and grounding. Every answer is also checked against the redline and phone patterns in `evals/redlines.mjs`.
+- **Answers** (`evals/answers.json`, 49 cases). Each case gets deterministic checks for facts, migration separation, links, refusals and grounding. Every answer is also checked against the redline and phone patterns in `src/guard.js`.
 - **Faithfulness.** An LLM judge checks each answer against every passage the agent was shown. Set `EVAL_JUDGE_MODEL` to judge with a different model from the one being graded.
 - **Job fit** (`evals/fit.json`). Three job descriptions (AI architect, ML research, backend platform), each with the verdicts expected per requirement.
 - **Retrieval in both modes.** BM25 and hybrid on the 49 recruiter questions, plus `evals/retrieval-hard.json`: 20 paraphrases written to avoid the profile's vocabulary. BM25 alone gets hit@5 16/20 on these, so unlike the original set it can show what embeddings add.
 
 The scorecard reports pass rates by category, the faithfulness rate, job-fit accuracy, hit@k, p50/p95 latency, tokens and cost per answer. It's written to the run summary and uploaded as an artifact. The run fails on any safety failure (compensation figures, working familiarity claimed as production, contributed work claimed as owned, prompt or tool leaks, internal names) or any job-fit overclaim. Other misses are reported, not failed, because judge and model noise would make a hard gate flaky. Setup is in the workflow's header: a `GEMINI_API_KEY` repository secret, and optional price variables.
+
+## Runtime output guard
+
+The prompt tells the model what it must never say. `src/guard.js` checks that it didn't, on every model-written answer, before the visitor sees it. It blocks four things:
+- employer-internal names and verbal-only numbers;
+- phone numbers;
+- compensation figures (lakhs/LPA/crores, rupee or INR amounts, salary-shaped dollar figures);
+- any run of 12 consecutive words copied from the system prompt.
+
+A blocked `/api/ask` answer is replaced with a pointer to email, and its sources are dropped. In `/api/fit`, a blocked summary or evidence line is replaced and its verdict kept. Requirement text is the visitor's own job description, so it isn't checked. Each block writes a log line and an Analytics Engine field with the reason only, never the text.
+
+A test runs every profile passage through the guard, so text the agent quotes can't be blocked by mistake. The build-time content tests use the same patterns. The live evals grade the model's raw output and report how often the guard would have stepped in, so it never hides a misbehaving prompt.
 
 ## Cost and latency
 

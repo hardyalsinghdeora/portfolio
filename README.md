@@ -12,6 +12,7 @@ POST /api/ask ── Cloudflare Worker (src/worker.js)
       │  validate turns · same-origin check · per-IP rate limit (KV)
       ▼
 Agent loop (src/agent.js) ── Gemini function calling, max 4 model calls
+      │  Claude fallback (src/providers.js) when Gemini fails and ANTHROPIC_API_KEY is set
       │  step 1: must call a tool   (toolConfig ANY)
       │  steps 2–3: model decides   (AUTO)
       │  step 4: must answer        (NONE)
@@ -42,7 +43,7 @@ Answer text  U+001E  { sources, steps, retrieval }  →  page renders sources + 
 | **Bounded loop: ANY → AUTO → NONE** | The first step is forced to retrieve, so answers are grounded. The last step is forced to answer, so cost and latency have a hard ceiling. |
 | **Tools return facts only** | Tools are read-only over a public profile. Unknown tools and bad arguments return errors to the model instead of throwing. |
 | **Keys and prompt stay server-side** | The browser sends only conversation turns, so the endpoint can't be repurposed as a free Gemini proxy. |
-| **Graceful degradation** | If the embedding call fails, the agent falls back to BM25. If the LLM is down or rate-limited, the page falls back to scripted answers. |
+| **Graceful degradation** | If the embedding call fails, the agent falls back to BM25. If Gemini fails, Claude answers when an Anthropic key is set. If no model is available, the page falls back to scripted answers. |
 
 More detail, including trade-offs and what I'd do at larger scale, is in [docs/architecture.md](docs/architecture.md).
 
@@ -98,7 +99,8 @@ For overall traffic and referrers, turn on Cloudflare Web Analytics for the Page
 ```
 knowledge/profile.json   single source of truth: my career profile (public facts only)
 src/rag.js               chunking, BM25, Gemini embeddings, reciprocal rank fusion
-src/agent.js             system prompt, tool schemas, bounded function-calling loop
+src/agent.js             system prompt, tool schemas, the bounded loop, the Gemini adapter, usage and cost
+src/providers.js         the Claude adapter and the fallback between providers
 src/fit.js               job-description fit: extract requirements, retrieve evidence, judge, re-check
 src/guard.js             runtime output guard; its patterns also gate the build and grade the evals
 evals/                   live-model eval sets and the harness
@@ -127,11 +129,12 @@ npm test          # build, then run every test headlessly
 
 `npm test` builds `dist/`, opens `tests/index.html` in headless Chromium, and then loads the bundled `dist/_worker.js` in Node for a smoke test. The test page runs the real modules against a mocked Gemini API, so it needs no key and no network. You can also open `http://localhost:8787/tests/` after `scripts/dev-server.ps1`.
 
-- **36/36 tests passing.** They cover:
+- **41/41 tests passing.** They cover:
   - retrieval: chunking, BM25, synonym expansion, RRF, hybrid search, the embedding cache and the BM25 fallback;
   - the agent loop: tool calls, thought-signature echo, step bounds, unknown tools and hidden thoughts;
   - job fit: two structured-output calls, uncited matches turned into gaps, working familiarity capped at partial, requirement and length caps, and the endpoint's error codes;
   - usage: token, latency and cost totals per answer, the Analytics Engine data point, and that passage ids stay server-side;
+  - the Claude provider: closed JSON schemas, the exact request (version header, no sampling parameters, never forced tool use, refusal fallback), thinking blocks echoed verbatim, the retrieval reminder, the no-tools final step, a result for every tool call, refusals, and fallback for answers and job fit;
   - the output guard: what it blocks, that no profile passage trips it, and that both endpoints replace guarded text;
   - the eval harness itself: its deterministic checks, and a full run against a fake model that must catch a leaked salary, an unfaithful answer and a job-fit overclaim;
   - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit, which lets requests through if KV fails or hits its daily write cap, and visit-source counting;
@@ -163,6 +166,25 @@ A blocked `/api/ask` answer is replaced with a pointer to email, and its sources
 
 A test runs every profile passage through the guard, so text the agent quotes can't be blocked by mistake. The build-time content tests use the same patterns. The live evals grade the model's raw output and report how often the guard would have stepped in, so it never hides a misbehaving prompt.
 
+## Provider fallback
+
+Gemini is the primary model (free tier). Set `ANTHROPIC_API_KEY` in the Pages project and Claude becomes the fallback: when a Gemini call fails (a quota 429, a 5xx, a network error), the request runs again on Claude (`src/providers.js`). The agent loop is shared, and each provider is an adapter that keeps its own transcript in its API's format. `ANTHROPIC_MODEL` picks the model (default `claude-opus-5-5`), and `LLM_PRIMARY=claude` puts Claude first.
+
+- **Answers:** the whole agent run restarts on the fallback provider, so one transcript never mixes two APIs.
+- **Job fit:** each of its two structured-output calls falls back on its own, since they're stateless.
+- **Visible:** the trace says which model answered and why (*answered by claude-opus-5-5 after gemini failed (429)*), and the scorecard counts fallback answers.
+
+Claude-specific handling:
+- **Raw `fetch`.** The build concatenates `src/` into one Worker with no bundler, so the npm SDK isn't used.
+- **API version `2026-10-21`**, with no sampling parameters.
+- **Strict tools.** Gemini's schemas are converted to closed JSON Schema.
+- **No forced tool use.** Claude Opus 5.5 rejects `tool_choice: any`, so the first step runs `auto` and gets one reminder to retrieve if it skipped the lookup; the final step uses `none`.
+- **Append-only transcript.** Assistant turns go back verbatim, thinking blocks included.
+- **One `tool_result` per `tool_use`.**
+- **Refusal fallback** with `fallbacks: "default"`; a refusal that survives it ends the answer cleanly.
+- **Structured output** via `output_config.format` for job fit.
+- **Cost** uses Anthropic's published prices, built in for current Claude models; `ANTHROPIC_PRICE_INPUT` / `ANTHROPIC_PRICE_OUTPUT` override them.
+
 ## Cost and latency
 
 Every answer and fit check returns `usage`: model calls, input and output tokens (thinking tokens count as output), wall-clock time and, when `GEMINI_PRICE_INPUT` / `GEMINI_PRICE_OUTPUT` (USD per 1M tokens) are set, cost. Without prices, cost stays empty rather than guessed. Embedding calls aren't counted, because the API reports no usage for them. The page shows the figures in the agent trace, e.g. *1.6 s · 2,140 tokens · 2 model calls · $0.0004*, and in the job-fit note.
@@ -186,6 +208,7 @@ The live site is a Cloudflare Pages project in advanced mode, using `_worker.js`
 3. Under **Settings → Variables and Secrets**, add the secret `GEMINI_API_KEY`.
    - Optional: `GEMINI_MODEL`, `GEMINI_EMBED_MODEL` and `RAG_EMBEDDINGS=off`.
    - Optional KV binding `RATE_KV`, for rate limiting and the embedding cache.
+   - Optional `ANTHROPIC_API_KEY` (secret), for the Claude fallback; `ANTHROPIC_MODEL` and `LLM_PRIMARY` tune it.
    - Optional `GEMINI_PRICE_INPUT` and `GEMINI_PRICE_OUTPUT` (USD per 1M tokens), to show cost per answer.
    - Optional Analytics Engine binding `USAGE_AE`, for cost and latency history.
 

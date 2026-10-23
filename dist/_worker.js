@@ -1062,97 +1062,300 @@ function usageOf(data) {
   return { input: u.promptTokenCount || 0, output: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0) };
 }
 
-// A running total for one request. Embedding calls aren't included: the API reports no usage.
-function newUsage(env) {
-  return { model: env.GEMINI_MODEL || DEFAULT_MODEL, calls: 0, input_tokens: 0, output_tokens: 0, ms: 0, cost_usd: null, started: Date.now() };
+// Anthropic's published per-1M-token prices for the Claude models the fallback may use (input,
+// output). ANTHROPIC_PRICE_INPUT / ANTHROPIC_PRICE_OUTPUT override them.
+const CLAUDE_PRICES = {
+  "claude-opus-5-5": [4, 20], "claude-opus-5": [5, 25], "claude-opus-4-8": [5, 25],
+  "claude-sonnet-5-5": [2, 10], "claude-haiku-5-5": [0.1, 0.5], "claude-fable-5-1": [10, 50],
+};
+
+// Gemini prices change and aren't built in: set GEMINI_PRICE_INPUT and GEMINI_PRICE_OUTPUT (USD per
+// 1M tokens, from Google's pricing page). A model without a price leaves cost_usd null, never guessed.
+function pricesFor(model, env) {
+  const env2 = (a, b) => [parseFloat(env[a]), parseFloat(env[b])];
+  const p = /^claude-/.test(model)
+    ? (Number.isFinite(parseFloat(env.ANTHROPIC_PRICE_INPUT)) ? env2("ANTHROPIC_PRICE_INPUT", "ANTHROPIC_PRICE_OUTPUT") : CLAUDE_PRICES[model])
+    : env2("GEMINI_PRICE_INPUT", "GEMINI_PRICE_OUTPUT");
+  return p && Number.isFinite(p[0]) && Number.isFinite(p[1]) ? p : null;
 }
 
-function addUsage(total, call) {
+// A running total for one request. Embedding calls aren't included: the API reports no usage.
+function newUsage(model) {
+  return { model, calls: 0, input_tokens: 0, output_tokens: 0, ms: 0, cost_usd: null, started: Date.now(), byModel: {} };
+}
+
+function addUsage(total, call, model) {
   total.calls++;
   total.input_tokens += call.input;
   total.output_tokens += call.output;
+  total.model = model;
+  const m = total.byModel[model] || (total.byModel[model] = { input: 0, output: 0 });
+  m.input += call.input;
+  m.output += call.output;
 }
 
-// Cost needs prices, which change: set GEMINI_PRICE_INPUT and GEMINI_PRICE_OUTPUT (USD per 1M
-// tokens, from Google's pricing page). Without them cost_usd stays null rather than guessing.
 function finishUsage(total, env) {
-  const pin = parseFloat(env.GEMINI_PRICE_INPUT), pout = parseFloat(env.GEMINI_PRICE_OUTPUT);
-  const { started, ...out } = total;
+  const { started, byModel, ...out } = total;
   out.ms = Date.now() - started;
-  if (Number.isFinite(pin) && Number.isFinite(pout)) {
-    out.cost_usd = Math.round((total.input_tokens * pin + total.output_tokens * pout) / 1e6 * 1e7) / 1e7;
+  const models = Object.keys(byModel);
+  if (models.length > 1) out.models = models;
+  const prices = models.map((m) => pricesFor(m, env));
+  if (models.length && prices.every(Boolean)) {
+    const usd = models.reduce((sum, m, i) => sum + byModel[m].input * prices[i][0] + byModel[m].output * prices[i][1], 0) / 1e6;
+    out.cost_usd = Math.round(usd * 1e7) / 1e7;
   }
   return out;
 }
 
-async function generate(env, contents, mode, fetchImpl) {
+const CANT = "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.";
+const MAX_CALLS_PER_STEP = 3;
+
+// A provider adapter keeps its own transcript in its API's format. step(mode) makes one model call
+// ("first": must look something up, "auto": model decides, "final": must answer) and returns
+// { text, calls: [{ id, name, args }], usage, model, refused }; addResults() appends tool results.
+function geminiAgent(env, fetchImpl) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
-  const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
+  let contents = [];
+  return {
+    name: "gemini", model, canForce: true,
+    start(turns) {
+      contents = turns.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.content }] }));
+    },
+    async step(mode) {
+      const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM }] },
+          contents,
+          tools: TOOLS,
+          toolConfig: { functionCallingConfig: { mode: mode === "first" ? "ANY" : mode === "final" ? "NONE" : "AUTO" } },
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
+        }),
+      });
+      if (!res.ok) {
+        const err = new Error("gemini " + res.status);
+        err.status = res.status;
+        err.detail = await res.text().catch(() => "");
+        throw err;
+      }
+      const data = await res.json();
+      const content = data.candidates && data.candidates[0] && data.candidates[0].content;
+      const parts = (content && content.parts) || [];
+      const calls = parts.filter((p) => p.functionCall)
+        .map((p) => ({ id: p.functionCall.id, name: p.functionCall.name, args: p.functionCall.args || {} }));
+      // Keep the model's turn verbatim: Gemini needs its thought signatures echoed back.
+      if (calls.length) contents.push({ role: "model", parts });
+      return { text: parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("").trim(), calls, usage: usageOf(data), model };
+    },
+    addResults(results) {
+      contents.push({ role: "user", parts: results.map((r) => ({ functionResponse: { ...(r.id ? { id: r.id } : {}), name: r.name, response: r.result } })) });
+    },
+  };
+}
+
+// turns: [{ role: "user" | "assistant", content }], already validated. provider defaults to Gemini;
+// runAgentWithFallback (providers.js) picks one and falls back to the other.
+// Returns { text, sources, steps, retrieval, usage, seen }. seen lists every passage id the model
+// was shown (sources is capped for display); the eval's faithfulness judge needs all of them.
+async function runAgent({ turns, index, profile, env, fetchImpl = fetch, provider }) {
+  const p = provider || geminiAgent(env, fetchImpl);
+  const ctx = { index, profile, env, fetchImpl, retrieval: null };
+  const steps = [];
+  const sources = new Map();
+  const seen = new Set();
+  const usage = newUsage(p.model);
+  const done = (text, srcs) => ({ text, sources: srcs, steps, retrieval: ctx.retrieval || "none", usage: finishUsage(usage, env), seen: [...seen] });
+  p.start(turns);
+
+  for (let step = 0; step < MAX_STEPS; step++) {
+    // Step 1 must look something up, the last step must answer, and the model decides in between.
+    const mode = step === 0 ? "first" : step === MAX_STEPS - 1 ? "final" : "auto";
+    const r = await p.step(mode);
+    addUsage(usage, r.usage, r.model || p.model);
+    if (r.refused) return done(CANT, []);
+
+    if (!r.calls.length) {
+      // A provider that can't force a tool call gets one reminder to retrieve before answering.
+      if (mode === "first" && !p.canForce) { p.nudge(); continue; }
+      return done(r.text || CANT, [...sources.values()].slice(0, MAX_SOURCES));
+    }
+
+    const results = [];
+    for (const [i, c] of r.calls.entries()) {
+      // Every call gets a result (Claude requires one per tool_use); past the cap it's an error.
+      if (i >= MAX_CALLS_PER_STEP) { results.push({ id: c.id, name: c.name, result: { error: "skipped: at most 3 tool calls per step" } }); continue; }
+      const { result, sources: found } = await runTool(c.name, c.args, ctx);
+      for (const s of found) if (!sources.has(s.id)) sources.set(s.id, s);
+      for (const ps of (result && result.passages) || []) seen.add(ps.id);
+      steps.push({ tool: c.name, args: c.args, found: found.map((s) => s.title) });
+      results.push({ id: c.id, name: c.name, result });
+    }
+    p.addResults(results);
+  }
+  // Reached only when a final step still asked for tools, which the "final" mode forbids.
+  return done(CANT, []);
+}
+
+
+// ---- src/providers.js ----
+// Anthropic Claude as a second provider, and the fallback between providers.
+// Gemini stays primary (free tier); when a Gemini call fails (quota 429, 5xx, network) and an
+// ANTHROPIC_API_KEY is set, the request runs again on Claude. LLM_PRIMARY=claude swaps the order.
+// Raw fetch, like the Gemini calls: the build concatenates src/ into one _worker.js with no bundler,
+// so the npm SDK can't be included.
+
+
+const CLAUDE_API = "https://api.anthropic.com/v1/messages";
+const CLAUDE_VERSION = "2026-10-21";
+const CLAUDE_DEFAULT_MODEL = "claude-opus-5-5";
+// Models that accept server-side refusal fallback ("fallbacks": "default"). On a safety decline the
+// API re-runs the request on Anthropic's recommended model for that refusal category.
+const SERVER_FALLBACK = new Set(["claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"]);
+const NUDGE = "Look this up in my profile with your tools before answering.";
+
+// Gemini's OpenAPI-style schemas ("OBJECT", "STRING") to JSON Schema, with every object closed
+// (additionalProperties: false), which strict tools and structured outputs require.
+function toJsonSchema(s) {
+  if (!s || typeof s !== "object") return s;
+  const out = {};
+  for (const [k, v] of Object.entries(s)) {
+    if (k === "type") out.type = String(v).toLowerCase();
+    else if (k === "properties") out.properties = Object.fromEntries(Object.entries(v).map(([n, p]) => [n, toJsonSchema(p)]));
+    else if (k === "items") out.items = toJsonSchema(v);
+    else out[k] = v;
+  }
+  if (out.type === "object") Object.assign(out, { properties: out.properties || {}, required: out.required || [], additionalProperties: false });
+  return out;
+}
+
+function claudeUsage(data) {
+  const u = (data && data.usage) || {};
+  return { input: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), output: u.output_tokens || 0 };
+}
+
+async function claudeRequest(env, body, fetchImpl) {
+  const fallback = SERVER_FALLBACK.has(body.model);
+  const res = await fetchImpl(CLAUDE_API, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents,
-      tools: TOOLS,
-      toolConfig: { functionCallingConfig: { mode } },
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
-    }),
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": env.ANTHROPIC_API_KEY,
+      "anthropic-version": CLAUDE_VERSION,
+      ...(fallback ? { "anthropic-beta": "server-side-fallback-2026-07-01" } : {}),
+    },
+    body: JSON.stringify(fallback ? { ...body, fallbacks: "default" } : body),
   });
   if (!res.ok) {
-    const err = new Error("gemini " + res.status);
+    const err = new Error("claude " + res.status);
     err.status = res.status;
     err.detail = await res.text().catch(() => "");
     throw err;
   }
-  const data = await res.json();
-  const content = data.candidates && data.candidates[0] && data.candidates[0].content;
-  return { content: content || { role: "model", parts: [] }, usage: usageOf(data) };
+  return res.json();
 }
 
-// turns: [{ role: "user" | "assistant", content }], already validated.
-// Returns { text, sources, steps, retrieval, usage, seen }. seen lists every passage id the model
-// was shown (sources is capped for display); the eval's faithfulness judge needs all of them.
-async function runAgent({ turns, index, profile, env, fetchImpl = fetch }) {
-  const ctx = { index, profile, env, fetchImpl, retrieval: null };
-  const contents = turns.map((t) => ({
-    role: t.role === "assistant" ? "model" : "user",
-    parts: [{ text: t.content }],
+// The agent loop on Claude. Differences from Gemini that the adapter absorbs:
+// - Claude Opus 5.5 rejects forced tool use (tool_choice "any"), so the first step runs "auto" and
+//   runAgent nudges once if no tool was called; the final step uses "none".
+// - The assistant turn is appended verbatim, thinking blocks included: they must be sent back
+//   unchanged, and the transcript is only ever appended to.
+// - No temperature: API version 2026-10-21 rejects sampling parameters.
+function claudeAgent(env, fetchImpl) {
+  const model = env.ANTHROPIC_MODEL || CLAUDE_DEFAULT_MODEL;
+  const tools = TOOLS[0].functionDeclarations.map((f) => ({
+    name: f.name, description: f.description, input_schema: toJsonSchema(f.parameters), strict: true,
   }));
-  const steps = [];
-  const sources = new Map();
-  const seen = new Set();
-  const usage = newUsage(env);
-  const done = (text, srcs) => ({ text, sources: srcs, steps, retrieval: ctx.retrieval || "none", usage: finishUsage(usage, env), seen: [...seen] });
+  let messages = [];
+  return {
+    name: "claude", model, canForce: false,
+    start(turns) {
+      messages = turns.map((t) => ({ role: t.role, content: t.content }));
+    },
+    async step(mode) {
+      const data = await claudeRequest(env, {
+        model, max_tokens: 16000, system: SYSTEM, tools,
+        tool_choice: { type: mode === "final" ? "none" : "auto" },
+        messages,
+      }, fetchImpl);
+      const content = Array.isArray(data.content) ? data.content : [];
+      const usage = claudeUsage(data);
+      if (data.stop_reason === "refusal") return { refused: true, text: "", calls: [], usage, model: data.model || model };
+      messages.push({ role: "assistant", content });
+      return {
+        text: content.filter((b) => b.type === "text").map((b) => b.text).join("").trim(),
+        calls: content.filter((b) => b.type === "tool_use").map((b) => ({ id: b.id, name: b.name, args: b.input || {} })),
+        usage, model: data.model || model,
+      };
+    },
+    addResults(results) {
+      // All results go back in one user message, one tool_result per tool_use.
+      messages.push({ role: "user", content: results.map((r) => ({
+        type: "tool_result", tool_use_id: r.id, content: JSON.stringify(r.result),
+        ...(r.result && r.result.error ? { is_error: true } : {}),
+      })) });
+    },
+    nudge() {
+      messages.push({ role: "user", content: NUDGE });
+    },
+  };
+}
 
-  for (let step = 0; step < MAX_STEPS; step++) {
-    // Step 1 must look something up, the last step must answer, and the model decides in between.
-    const mode = step === 0 ? "ANY" : step === MAX_STEPS - 1 ? "NONE" : "AUTO";
-    const { content, usage: callUsage } = await generate(env, contents, mode, fetchImpl);
-    addUsage(usage, callUsage);
-    const parts = content.parts || [];
-    const calls = parts.filter((p) => p.functionCall);
-    const text = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("").trim();
-
-    if (!calls.length) {
-      return done(text || "I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.",
-        [...sources.values()].slice(0, MAX_SOURCES));
-    }
-
-    // Keep the model's turn verbatim: Gemini needs its thought signatures echoed back.
-    contents.push({ role: "model", parts });
-    const responses = [];
-    for (const p of calls.slice(0, 3)) {
-      const { name, args, id } = p.functionCall;
-      const { result, sources: found } = await runTool(name, args || {}, ctx);
-      for (const s of found) if (!sources.has(s.id)) sources.set(s.id, s);
-      for (const ps of (result && result.passages) || []) seen.add(ps.id);
-      steps.push({ tool: name, args: args || {}, found: found.map((s) => s.title) });
-      responses.push({ functionResponse: { ...(id ? { id } : {}), name, response: result } });
-    }
-    contents.push({ role: "user", parts: responses });
+// One structured-output call on Claude (output_config.format), for the job-fit pipeline.
+async function claudeJSON({ env, system, text, schema, fetchImpl, usage }) {
+  const model = env.ANTHROPIC_MODEL || CLAUDE_DEFAULT_MODEL;
+  const data = await claudeRequest(env, {
+    model, max_tokens: 16000, system,
+    messages: [{ role: "user", content: text }],
+    output_config: { format: { type: "json_schema", schema: toJsonSchema(schema) } },
+  }, fetchImpl);
+  addUsage(usage, claudeUsage(data), data.model || model);
+  if (data.stop_reason === "refusal") {
+    const err = new Error("claude refused");
+    err.status = 422;
+    throw err;
   }
-  // Unreachable in practice: the final step runs with tools disabled.
-  return done("I can't answer that one here. Email me at hardyalsinghdeora@gmail.com.", []);
+  const out = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+  try {
+    return JSON.parse(out);
+  } catch {
+    const err = new Error("claude returned invalid JSON");
+    err.status = 502;
+    throw err;
+  }
+}
+
+// Runs attempts in provider order, skipping unconfigured ones; on any error tries the next.
+// Returns { value, provider, fallback } where fallback is { from, reason } when the first failed.
+async function withFallback(env, attempts) {
+  const list = attempts.filter((a) => a.ok);
+  if (env.LLM_PRIMARY === "claude") list.sort((a, b) => (b.name === "claude") - (a.name === "claude"));
+  if (!list.length) {
+    const err = new Error("no model provider configured");
+    err.status = 503;
+    throw err;
+  }
+  let first = null;
+  for (let i = 0; i < list.length; i++) {
+    try {
+      const value = await list[i].run();
+      return { value, provider: list[i].name, fallback: i ? { from: list[0].name, reason: String((first && first.status) || "network") } : null };
+    } catch (err) {
+      console.warn(`${list[i].name} failed${i < list.length - 1 ? ", falling back" : ""}:`, err && err.status, err && err.message);
+      first = first || err;
+      if (i === list.length - 1) throw err;
+    }
+  }
+}
+
+async function runAgentWithFallback(opts) {
+  const { env, fetchImpl = fetch } = opts;
+  const { value, fallback } = await withFallback(env, [
+    { name: "gemini", ok: Boolean(env.GEMINI_API_KEY), run: () => runAgent({ ...opts, fetchImpl, provider: geminiAgent(env, fetchImpl) }) },
+    { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: () => runAgent({ ...opts, fetchImpl, provider: claudeAgent(env, fetchImpl) }) },
+  ]);
+  if (fallback) value.usage.fallback = fallback;
+  return value;
 }
 
 
@@ -1277,7 +1480,7 @@ const JUDGE_SCHEMA = {
   required: ["summary", "results"],
 };
 
-async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
+async function geminiJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
     method: "POST",
@@ -1295,7 +1498,7 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
     throw err;
   }
   const data = await res.json();
-  addUsage(usage, usageOf(data));
+  addUsage(usage, usageOf(data), model);
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   const out = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("");
   try {
@@ -1307,9 +1510,20 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
   }
 }
 
+// Each call falls back to Claude on its own: the calls are stateless, so a failed judge call can
+// rerun on Claude without redoing the extraction.
+async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
+  const { value, fallback } = await withFallback(env, [
+    { name: "gemini", ok: Boolean(env.GEMINI_API_KEY), run: () => geminiJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) },
+    { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: () => claudeJSON({ env, system, text, schema, fetchImpl, usage }) },
+  ]);
+  if (fallback) usage.fallback = fallback;
+  return value;
+}
+
 // Returns { summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval, usage }.
 async function assessFit({ jd, index, env, fetchImpl = fetch }) {
-  const usage = newUsage(env);
+  const usage = newUsage(env.GEMINI_MODEL || DEFAULT_MODEL);  // relabelled by each call
   const extracted = await generateJSON(env, EXTRACT_SYSTEM, "Job description:\n<<<\n" + jd + "\n>>>",
     EXTRACT_SCHEMA, 1024, fetchImpl, usage);
   const requirements = (Array.isArray(extracted.requirements) ? extracted.requirements : [])
@@ -1371,6 +1585,8 @@ async function assessFit({ jd, index, env, fetchImpl = fetch }) {
 //   GET  /api/search  retrieval only, no LLM call: ?q=... returns the top passages
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
+//           ANTHROPIC_API_KEY (optional): Claude answers when Gemini fails; ANTHROPIC_MODEL picks the
+//           model (default claude-opus-5-5), LLM_PRIMARY=claude makes Claude the first choice
 // Optional: GEMINI_MODEL, GEMINI_EMBED_MODEL, RAG_EMBEDDINGS=off (BM25 only),
 //           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts),
 //           USAGE_AE (Workers Analytics Engine binding: one data point per answer, for cost and latency),
@@ -1434,7 +1650,7 @@ async function handle(request, env, fetchImpl) {
 
 async function ask(request, env, fetchImpl) {
   if (!sameOrigin(request)) return json(403, { error: "forbidden" });
-  if (!env.GEMINI_API_KEY) return json(503, { error: "not_configured" });
+  if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY) return json(503, { error: "not_configured" });
 
   let body;
   try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }
@@ -1444,7 +1660,7 @@ async function ask(request, env, fetchImpl) {
 
   let result;
   try {
-    result = await runAgent({ turns, index: getIndex(), profile: PROFILE, env, fetchImpl });
+    result = await runAgentWithFallback({ turns, index: getIndex(), profile: PROFILE, env, fetchImpl });
   } catch (err) {
     console.error("agent failed", err && err.status, err && err.detail);
     // Free-tier quota exhaustion comes back as 429; the page shows its "busy" note.
@@ -1465,7 +1681,7 @@ async function ask(request, env, fetchImpl) {
 
 async function fit(request, env, fetchImpl) {
   if (!sameOrigin(request)) return json(403, { error: "forbidden" });
-  if (!env.GEMINI_API_KEY) return json(503, { error: "not_configured" });
+  if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY) return json(503, { error: "not_configured" });
 
   let body;
   try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }

@@ -4,7 +4,8 @@
 
 import { PROFILE } from "../src/knowledge.js";
 import { buildChunks, buildIndex, search } from "../src/rag.js";
-import { runAgent, GENERATE_API, DEFAULT_MODEL, usageOf } from "../src/agent.js";
+import { GENERATE_API, DEFAULT_MODEL, usageOf } from "../src/agent.js";
+import { runAgentWithFallback } from "../src/providers.js";
 import { assessFit } from "../src/fit.js";
 import { PHONE, REDLINES, guardText } from "../src/guard.js";
 import { SYSTEM } from "../src/agent.js";
@@ -73,7 +74,8 @@ export async function runAnswerCase(c, { index, env, fetchImpl, sleep, judge = t
   const turns = c.turns || [{ role: "user", content: c.q }];
   const question = turns[turns.length - 1].content;
   try {
-    const r = await withRetry(() => runAgent({ turns, index, profile: PROFILE, env, fetchImpl }), sleep);
+    // Same path as the site: LLM_PRIMARY picks the provider, and the other key (if set) is the fallback.
+    const r = await withRetry(() => runAgentWithFallback({ turns, index, profile: PROFILE, env, fetchImpl }), sleep);
     const fails = checkAnswer(c, r.text, r.seen);
     let verdict = null;
     if (judge) {
@@ -143,6 +145,7 @@ export function summarize({ answers, fits, retrieval, safetyCategories }) {
     faithfulness: { judged: judged.length, supported: judged.filter((a) => a.judge.supported).length },
     safety: { failures: safetyFailures.map((a) => ({ id: a.id, category: a.category, fails: a.fails })) },
     guard: answers.filter((a) => a.guard).map((a) => ({ id: a.id, reason: a.guard })),
+    fallbacks: answers.filter((a) => a.usage && a.usage.fallback).length,
     fit: { evaluated: evaluated.length, pass: evaluated.filter((c) => c.status === "pass").length,
       notExtracted: fitChecks.length - evaluated.length, overclaims: fitChecks.filter((c) => c.overclaim) },
     retrieval,
@@ -173,6 +176,7 @@ export function scorecardMarkdown(s, { model, date }) {
     `| Latency per answer | p50 ${(s.latency.p50_ms / 1000).toFixed(1)} s · p95 ${(s.latency.p95_ms / 1000).toFixed(1)} s |`,
     `| Tokens per answer (mean) | ${s.tokens.mean.toLocaleString("en-US")} |`,
     `| Cost per answer (mean) | ${s.cost.mean_usd === null ? "set GEMINI_PRICE_INPUT / GEMINI_PRICE_OUTPUT" : "$" + s.cost.mean_usd.toFixed(5)} |`,
+    `| Answers served by the fallback provider | ${s.fallbacks} |`,
     `| Errors | ${s.errors} |`,
     ``, `## Answer checks by category`, ``, `| Category | Pass |`, `|---|---|`,
     ...Object.entries(s.answers.byCategory).map(([k, v]) => `| ${k} | ${v.pass}/${v.n} |`),

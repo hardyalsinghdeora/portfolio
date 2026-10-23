@@ -4,6 +4,8 @@
 //   GET  /api/search  retrieval only, no LLM call: ?q=... returns the top passages
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
+//           ANTHROPIC_API_KEY (optional): Claude answers when Gemini fails; ANTHROPIC_MODEL picks the
+//           model (default claude-opus-5-5), LLM_PRIMARY=claude makes Claude the first choice
 // Optional: GEMINI_MODEL, GEMINI_EMBED_MODEL, RAG_EMBEDDINGS=off (BM25 only),
 //           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts),
 //           USAGE_AE (Workers Analytics Engine binding: one data point per answer, for cost and latency),
@@ -14,7 +16,8 @@
 
 import { PROFILE } from "./knowledge.js";
 import { buildChunks, buildIndex, search } from "./rag.js";
-import { runAgent, SYSTEM } from "./agent.js";
+import { SYSTEM } from "./agent.js";
+import { runAgentWithFallback } from "./providers.js";
 import { guardText, GUARDED_ANSWER, GUARDED_EVIDENCE } from "./guard.js";
 import { assessFit, JD_MIN, JD_MAX } from "./fit.js";
 
@@ -72,7 +75,7 @@ export async function handle(request, env, fetchImpl) {
 
 async function ask(request, env, fetchImpl) {
   if (!sameOrigin(request)) return json(403, { error: "forbidden" });
-  if (!env.GEMINI_API_KEY) return json(503, { error: "not_configured" });
+  if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY) return json(503, { error: "not_configured" });
 
   let body;
   try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }
@@ -82,7 +85,7 @@ async function ask(request, env, fetchImpl) {
 
   let result;
   try {
-    result = await runAgent({ turns, index: getIndex(), profile: PROFILE, env, fetchImpl });
+    result = await runAgentWithFallback({ turns, index: getIndex(), profile: PROFILE, env, fetchImpl });
   } catch (err) {
     console.error("agent failed", err && err.status, err && err.detail);
     // Free-tier quota exhaustion comes back as 429; the page shows its "busy" note.
@@ -103,7 +106,7 @@ async function ask(request, env, fetchImpl) {
 
 async function fit(request, env, fetchImpl) {
   if (!sameOrigin(request)) return json(403, { error: "forbidden" });
-  if (!env.GEMINI_API_KEY) return json(503, { error: "not_configured" });
+  if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY) return json(503, { error: "not_configured" });
 
   let body;
   try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }

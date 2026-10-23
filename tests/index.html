@@ -32,6 +32,7 @@ import { runAgent, MAX_STEPS, SYSTEM } from "../src/agent.js";
 import { handle, validTurns, SEP, recordUsage } from "../src/worker.js";
 import { assessFit, JD_MIN, JD_MAX } from "../src/fit.js";
 import { PHONE, REDLINES, COMPENSATION, guardText, LEAK_WORDS } from "../src/guard.js";
+import { claudeAgent, toJsonSchema, runAgentWithFallback, CLAUDE_VERSION } from "../src/providers.js";
 import { checkAnswer, runEvals, scorecardMarkdown, failed as runFailed } from "../evals/harness.mjs";
 import { buildListings, listingsMarkdown, LIMITS } from "../scripts/listings.mjs";
 
@@ -302,6 +303,106 @@ await test("guard: /api/ask and /api/fit replace guarded text and never return i
   eq(d.guarded, true); assert(!/9876543210/.test(d.summary) && !/Zoho/.test(d.requirements[0].evidence));
   eq(d.requirements[0].requirement, "Zoho CRM experience", "the visitor's own requirement text is echoed as is");
   eq(d.requirements[1].evidence, "I run agents in production.");
+});
+// Mock of the Claude Messages API: replies are content-block arrays (or a function of the request).
+function mockClaude(script, calls = [], { stop } = {}) {
+  let step = 0;
+  return async (url, init) => {
+    if (!url.startsWith("https://api.anthropic.com/")) return new Response("unexpected " + url, { status: 500 });
+    const body = JSON.parse(init.body);
+    calls.push({ headers: init.headers, body: JSON.parse(JSON.stringify(body)) });
+    const next = script[Math.min(step++, script.length - 1)];
+    const content = typeof next === "function" ? next(body) : next;
+    return Response.json({ id: "msg_" + step, model: body.model, content, stop_reason: stop || (content.some((b) => b.type === "tool_use") ? "tool_use" : "end_turn"),
+      usage: { input_tokens: 1000, output_tokens: 100 } });
+  };
+}
+const claudeEnv = { ...env, ANTHROPIC_API_KEY: "sk-test" };
+const thinking = { type: "thinking", thinking: "", signature: "sig-1" };
+const toolUse = (id, name, input) => ({ type: "tool_use", id, name, input });
+
+await test("claude: tool schemas convert to closed JSON Schema", () => {
+  const t = toJsonSchema({ type: "OBJECT", properties: { section: { type: "STRING", enum: ["a", "b"] }, list: { type: "ARRAY", items: { type: "OBJECT", properties: { x: { type: "INTEGER" } }, required: ["x"] } } }, required: ["section"] });
+  eq(t.type, "object"); eq(t.additionalProperties, false); eq(t.properties.section.type, "string"); eq(t.properties.section.enum.join(), "a,b");
+  eq(t.properties.list.items.additionalProperties, false); eq(t.properties.list.items.properties.x.type, "integer");
+  const empty = toJsonSchema({ type: "OBJECT", properties: {} });
+  eq(JSON.stringify(empty), JSON.stringify({ type: "object", properties: {}, required: [], additionalProperties: false }));
+});
+await test("claude: request shape, tool loop with thinking echoed back, usage and cost", async () => {
+  const calls = [];
+  const step0 = [thinking, toolUse("toolu_1", "search_profile", { query: "agents" })];
+  const fetchImpl = mockClaude([step0, [{ type: "text", text: "Bounded agents." }]], calls);
+  const r = await runAgent({ turns, index, profile: PROFILE, env: claudeEnv, fetchImpl, provider: claudeAgent(claudeEnv, fetchImpl) });
+  eq(r.text, "Bounded agents."); eq(calls.length, 2); eq(r.steps[0].tool, "search_profile");
+  const [c0, c1] = calls;
+  eq(c0.headers["anthropic-version"], CLAUDE_VERSION); eq(CLAUDE_VERSION, "2026-10-21"); eq(c0.headers["x-api-key"], "sk-test");
+  eq(c0.headers["anthropic-beta"], "server-side-fallback-2026-07-01"); eq(c0.body.fallbacks, "default");
+  eq(c0.body.model, "claude-opus-5-5"); eq(c0.body.system, SYSTEM);
+  assert(!("temperature" in c0.body) && !("top_p" in c0.body), "no sampling parameters on API version 2026-10-21");
+  assert(calls.every((c) => c.body.tool_choice.type !== "any" && c.body.tool_choice.type !== "tool"), "never forced tool use");
+  eq(c0.body.tool_choice.type, "auto");
+  const sec = c0.body.tools.find((t) => t.name === "get_section");
+  eq(sec.strict, true); eq(sec.input_schema.additionalProperties, false); assert(sec.input_schema.properties.section.enum.includes("experience"));
+  eq(c1.body.messages.length, 3);
+  eq(JSON.stringify(c1.body.messages[1]), JSON.stringify({ role: "assistant", content: step0 }), "assistant turn echoed verbatim, thinking included");
+  const tr = c1.body.messages[2].content;
+  eq(c1.body.messages[2].role, "user"); eq(tr.length, 1); eq(tr[0].type, "tool_result"); eq(tr[0].tool_use_id, "toolu_1");
+  assert(JSON.parse(tr[0].content).passages.length > 0);
+  eq(r.usage.model, "claude-opus-5-5"); eq(r.usage.input_tokens, 2000); eq(r.usage.output_tokens, 200);
+  eq(r.usage.cost_usd, 0.012, "2,000 x $4/1M + 200 x $20/1M from the built-in price table");
+});
+await test("claude: nudges once when the first step skips retrieval, and the last step can't call tools", async () => {
+  const calls = [];
+  const fetchImpl = mockClaude([[{ type: "text", text: "Guessing." }], [toolUse("t1", "search_profile", { query: "x" })], [{ type: "text", text: "Grounded." }]], calls);
+  const r = await runAgent({ turns, index, profile: PROFILE, env: claudeEnv, fetchImpl, provider: claudeAgent(claudeEnv, fetchImpl) });
+  eq(r.text, "Grounded."); eq(calls.length, 3);
+  const m = calls[1].body.messages;
+  eq(m[m.length - 1].role, "user"); assert(/before answering/.test(m[m.length - 1].content), "nudge appended, history untouched");
+  const loopCalls = [];
+  const loop = mockClaude([[toolUse("t", "search_profile", { query: "x" })]], loopCalls);
+  const r2 = await runAgent({ turns, index, profile: PROFILE, env: claudeEnv, fetchImpl: loop, provider: claudeAgent(claudeEnv, loop) });
+  eq(loopCalls.length, MAX_STEPS); eq(loopCalls[MAX_STEPS - 1].body.tool_choice.type, "none"); assert(/Email me/.test(r2.text));
+  const manyCalls = [];
+  const many = mockClaude([[toolUse("a", "search_profile", { query: "1" }), toolUse("b", "search_profile", { query: "2" }),
+    toolUse("c", "search_profile", { query: "3" }), toolUse("d", "search_profile", { query: "4" })], [{ type: "text", text: "Done." }]], manyCalls);
+  await runAgent({ turns, index, profile: PROFILE, env: claudeEnv, fetchImpl: many, provider: claudeAgent(claudeEnv, many) });
+  const results = manyCalls[1].body.messages[2].content;
+  eq(results.length, 4, "every tool_use gets a tool_result"); eq(results[3].is_error, true);
+});
+await test("claude: a refusal ends the answer without content", async () => {
+  const fetchImpl = mockClaude([[]], [], { stop: "refusal" });
+  const r = await runAgent({ turns, index, profile: PROFILE, env: claudeEnv, fetchImpl, provider: claudeAgent(claudeEnv, fetchImpl) });
+  assert(/Email me/.test(r.text)); eq(r.sources.length, 0);
+});
+await test("fallback: Gemini failure reruns on Claude, for answers and job fit", async () => {
+  const geminiDown = async (url) => url.includes("generativelanguage") ? new Response("quota", { status: 429 }) : null;
+  const route = (claude) => async (url, init) => (await geminiDown(url, init)) || claude(url, init);
+  const calls = [];
+  const claude = mockClaude([[toolUse("t1", "search_profile", { query: "x" })], [{ type: "text", text: "From Claude." }]], calls);
+  const res = await handle(post({ messages: turns }), { ...claudeEnv, ASSETS: assets }, route(claude));
+  eq(res.status, 200);
+  const [text, meta] = (await res.text()).split(SEP);
+  const m = JSON.parse(meta);
+  eq(text, "From Claude."); eq(m.usage.model, "claude-opus-5-5"); eq(JSON.stringify(m.usage.fallback), JSON.stringify({ from: "gemini", reason: "429" }));
+  eq((await handle(post({ messages: turns }), { ...env, ASSETS: assets }, route(claude))).status, 429, "no Claude key: Gemini's 429 as before");
+  // LLM_PRIMARY=claude: Gemini is never called.
+  const seenUrls = [];
+  const primaryClaude = mockClaude([[toolUse("t", "search_profile", { query: "x" })], [{ type: "text", text: "Hi." }]]);
+  const spy = async (url, init) => { seenUrls.push(url); return primaryClaude(url, init); };
+  const primary = await runAgentWithFallback({ turns, index, profile: PROFILE, env: { ...claudeEnv, RAG_EMBEDDINGS: "off", LLM_PRIMARY: "claude" }, fetchImpl: spy });
+  eq(primary.text, "Hi."); assert(seenUrls.every((u) => u.startsWith("https://api.anthropic.com/")) && !primary.usage.fallback);
+  // Job fit: both structured-output calls move to Claude with a closed JSON schema.
+  const fitCalls = [];
+  const fitClaude = mockClaude([
+    () => [{ type: "text", text: JSON.stringify({ requirements: [{ requirement: "PostgreSQL", kind: "must" }] }) }],
+    (body) => { const id = body.messages[0].content.match(/candidates: ([^,\n]+)/)[1];
+      return [{ type: "text", text: JSON.stringify({ summary: "Good.", results: [{ index: 0, match: "strong", evidence: "Yes.", source_ids: [id] }] }) }]; },
+  ], fitCalls);
+  const fit = await assessFit({ jd: "Backend engineer with PostgreSQL schema design and migrations in production.", index, env: claudeEnv, fetchImpl: route(fitClaude) });
+  eq(fit.requirements[0].match, "strong"); eq(fitCalls.length, 2);
+  const fmt = fitCalls[1].body.output_config.format;
+  eq(fmt.type, "json_schema"); eq(fmt.schema.additionalProperties, false); eq(fmt.schema.properties.results.items.additionalProperties, false);
+  eq(fit.usage.fallback.from, "gemini"); eq(fit.usage.model, "claude-opus-5-5");
 });
 await test("worker: errors and guards", async () => {
   const E = { ...env, ASSETS: assets };

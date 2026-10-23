@@ -853,6 +853,7 @@ body.chatting .dock{display:block}
     var parts = [(u.ms / 1000).toFixed(1) + ' s', (u.input_tokens + u.output_tokens).toLocaleString('en-US') + ' tokens',
       u.calls + ' model call' + (u.calls === 1 ? '' : 's')];
     if (typeof u.cost_usd === 'number') parts.push(u.cost_usd < 0.0001 ? '<$0.0001' : '$' + u.cost_usd.toFixed(4));
+    if (u.fallback) parts.push('answered by ' + esc(String(u.model)) + ' after ' + esc(String(u.fallback.from)) + ' failed (' + esc(String(u.fallback.reason)) + ')');
     return parts.join(' &#183; ');
   }
 

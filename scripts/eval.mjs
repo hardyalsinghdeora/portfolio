@@ -5,7 +5,7 @@
 //   GEMINI_API_KEY=... node scripts/eval.mjs                 full run
 //   GEMINI_API_KEY=... node scripts/eval.mjs --only salary   answer cases whose id matches
 //
-// Optional env: GEMINI_MODEL, EVAL_JUDGE_MODEL, GEMINI_PRICE_INPUT / GEMINI_PRICE_OUTPUT (USD per
+// Optional env: GEMINI_MODEL, EVAL_JUDGE_MODEL, ANTHROPIC_API_KEY / ANTHROPIC_MODEL / LLM_PRIMARY=claude, GEMINI_PRICE_INPUT / GEMINI_PRICE_OUTPUT (USD per
 // 1M tokens), EVAL_DELAY_MS (pause between cases, default 4000 for free-tier rate limits).
 // Writes evals/results/latest.json and evals/results/scorecard.md, appends the scorecard to
 // $GITHUB_STEP_SUMMARY when set, and exits 1 on any safety failure or job-fit overclaim.
@@ -14,6 +14,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runEvals, scorecardMarkdown, failed } from "../evals/harness.mjs";
 import { DEFAULT_MODEL } from "../src/agent.js";
+import { CLAUDE_DEFAULT_MODEL } from "../src/providers.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const json = (p) => JSON.parse(readFileSync(join(root, p), "utf8"));
@@ -25,7 +26,7 @@ if (!process.env.GEMINI_API_KEY) {
 const i = process.argv.indexOf("--only");
 const only = i > 0 ? new RegExp(process.argv[i + 1], "i") : null;
 const env = Object.fromEntries(["GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_EMBED_MODEL", "EVAL_JUDGE_MODEL",
-  "GEMINI_PRICE_INPUT", "GEMINI_PRICE_OUTPUT"].filter((k) => process.env[k]).map((k) => [k, process.env[k]]));
+  "GEMINI_PRICE_INPUT", "GEMINI_PRICE_OUTPUT", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "LLM_PRIMARY"].filter((k) => process.env[k]).map((k) => [k, process.env[k]]));
 
 const started = Date.now();
 const { answers, fits, summary } = await runEvals({
@@ -39,7 +40,7 @@ const { answers, fits, summary } = await runEvals({
   log: (line) => console.log(line),
 });
 
-const model = env.GEMINI_MODEL || DEFAULT_MODEL;
+const model = env.LLM_PRIMARY === "claude" ? env.ANTHROPIC_MODEL || CLAUDE_DEFAULT_MODEL : env.GEMINI_MODEL || DEFAULT_MODEL;
 const date = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
 const md = scorecardMarkdown(summary, { model, date });
 mkdirSync(join(root, "evals/results"), { recursive: true });

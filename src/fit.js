@@ -6,6 +6,7 @@
 
 import { search } from "./rag.js";
 import { GENERATE_API, DEFAULT_MODEL, usageOf, newUsage, addUsage, finishUsage } from "./agent.js";
+import { claudeJSON, withFallback } from "./providers.js";
 
 export const JD_MIN = 80;
 export const JD_MAX = 8000;
@@ -70,7 +71,7 @@ const JUDGE_SCHEMA = {
   required: ["summary", "results"],
 };
 
-async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
+async function geminiJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const res = await fetchImpl(`${GENERATE_API}${model}:generateContent`, {
     method: "POST",
@@ -88,7 +89,7 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
     throw err;
   }
   const data = await res.json();
-  addUsage(usage, usageOf(data));
+  addUsage(usage, usageOf(data), model);
   const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
   const out = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join("");
   try {
@@ -100,9 +101,20 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
   }
 }
 
+// Each call falls back to Claude on its own: the calls are stateless, so a failed judge call can
+// rerun on Claude without redoing the extraction.
+async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) {
+  const { value, fallback } = await withFallback(env, [
+    { name: "gemini", ok: Boolean(env.GEMINI_API_KEY), run: () => geminiJSON(env, system, text, schema, maxOutputTokens, fetchImpl, usage) },
+    { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: () => claudeJSON({ env, system, text, schema, fetchImpl, usage }) },
+  ]);
+  if (fallback) usage.fallback = fallback;
+  return value;
+}
+
 // Returns { summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval, usage }.
 export async function assessFit({ jd, index, env, fetchImpl = fetch }) {
-  const usage = newUsage(env);
+  const usage = newUsage(env.GEMINI_MODEL || DEFAULT_MODEL);  // relabelled by each call
   const extracted = await generateJSON(env, EXTRACT_SYSTEM, "Job description:\n<<<\n" + jd + "\n>>>",
     EXTRACT_SCHEMA, 1024, fetchImpl, usage);
   const requirements = (Array.isArray(extracted.requirements) ? extracted.requirements : [])

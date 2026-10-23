@@ -9,6 +9,8 @@
 #   GEMINI_PRICE_INPUT    optional variable, USD per 1M input tokens, to report cost
 #   GEMINI_PRICE_OUTPUT   optional variable, USD per 1M output tokens
 #   EVAL_JUDGE_MODEL      optional variable, a different model to judge faithfulness
+#   ANTHROPIC_API_KEY     optional secret: the Claude fallback, and lets a manual run use Claude
+#                         as the primary provider to compare the two on the same eval set
 name: Evals
 
 on:
@@ -19,6 +21,11 @@ on:
       only:
         description: "Only answer cases whose id matches this regex (blank = full run)"
         required: false
+      primary:
+        description: "Primary provider for this run"
+        type: choice
+        options: [gemini, claude]
+        default: gemini
 
 permissions:
   contents: read
@@ -47,6 +54,8 @@ jobs:
           GEMINI_PRICE_INPUT: ${{ vars.GEMINI_PRICE_INPUT }}
           GEMINI_PRICE_OUTPUT: ${{ vars.GEMINI_PRICE_OUTPUT }}
           EVAL_JUDGE_MODEL: ${{ vars.EVAL_JUDGE_MODEL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_PRIMARY: ${{ inputs.primary || 'gemini' }}
           ONLY: ${{ inputs.only }}
         run: |
           if [ -n "$ONLY" ]; then node scripts/eval.mjs --only "$ONLY"; else node scripts/eval.mjs; fi

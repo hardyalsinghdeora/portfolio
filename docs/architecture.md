@@ -62,6 +62,7 @@ That eval only measured retrieval, on BM25. It saturated (49/49), and it never t
 
 It fails only on safety failures and overclaims; everything else is a trend to watch, not a gate. Every answer now also reports its model calls, tokens, latency and (with prices configured) cost.
 
+Visitor feedback closes the loop from the other side. A 👎 on a live answer, with an optional note, becomes a draft eval case (`scripts/feedback.mjs`). Answers are signed, so only answers the site actually gave can be rated.
+
 Next:
-- log anonymised retrieval misses, the questions where the top score is low, to grow the eval set;
-- collect visitor feedback on answers and turn it into eval cases.
+- log anonymised retrieval misses, the questions where the top score is low, to grow the eval set.

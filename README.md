@@ -92,6 +92,8 @@ For overall traffic and referrers, turn on Cloudflare Web Analytics for the Page
 |---|---|
 | `POST /api/ask` | `{ "messages": [{ "role": "user", "content": "..." }] }` → answer text, then `\u001e`, then `{ sources, steps, retrieval }` |
 | `POST /api/fit` | `{ "jd": "..." }` (80 to 8,000 characters) → `{ summary, requirements: [{ requirement, kind, match, evidence, sources }], counts, retrieval }` |
+| `POST /api/feedback` | `{ rating: "up" \| "down", question, answer, token, comment?, sources?, retrieval?, model? }`, where `token` is the answer's `meta.fb` → `{ ok: true }`. Needs `RATE_KV`. |
+| `GET /api/feedback?limit=200` | Feedback export, newest first. `Authorization: Bearer <FEEDBACK_ADMIN_TOKEN>`; 404 when that secret isn't set. |
 | `GET /api/search?q=...&k=5` | Retrieval only, with no LLM call. Useful for debugging retrieval quality. |
 
 ## Repo layout
@@ -103,6 +105,8 @@ src/agent.js             system prompt, tool schemas, the bounded loop, the Gemi
 src/providers.js         the Claude adapter and the fallback between providers
 src/fit.js               job-description fit: extract requirements, retrieve evidence, judge, re-check
 src/guard.js             runtime output guard; its patterns also gate the build and grade the evals
+src/feedback.js          answer signatures, feedback validation, and drafts of eval cases from 👎
+scripts/feedback.mjs     pulls feedback from the live site and writes the draft eval cases
 evals/                   live-model eval sets and the harness
 scripts/eval.mjs         runs the evals against the live Gemini API and writes the scorecard
 src/worker.js            HTTP routing, validation, rate limiting, response format
@@ -129,12 +133,13 @@ npm test          # build, then run every test headlessly
 
 `npm test` builds `dist/`, opens `tests/index.html` in headless Chromium, and then loads the bundled `dist/_worker.js` in Node for a smoke test. The test page runs the real modules against a mocked Gemini API, so it needs no key and no network. You can also open `http://localhost:8787/tests/` after `scripts/dev-server.ps1`.
 
-- **41/41 tests passing.** They cover:
+- **43/43 tests passing.** They cover:
   - retrieval: chunking, BM25, synonym expansion, RRF, hybrid search, the embedding cache and the BM25 fallback;
   - the agent loop: tool calls, thought-signature echo, step bounds, unknown tools and hidden thoughts;
   - job fit: two structured-output calls, uncited matches turned into gaps, working familiarity capped at partial, requirement and length caps, and the endpoint's error codes;
   - usage: token, latency and cost totals per answer, the Analytics Engine data point, and that passage ids stay server-side;
   - the Claude provider: closed JSON schemas, the exact request (version header, no sampling parameters, never forced tool use, refusal fallback), thinking blocks echoed verbatim, the retrieval reminder, the no-tools final step, a result for every tool call, refusals, and fallback for answers and job fit;
+  - visitor feedback: signed answers, forged answers rejected, what is stored (and that no IP is), the limits, and the token-protected export with draft eval cases;
   - the output guard: what it blocks, that no profile passage trips it, and that both endpoints replace guarded text;
   - the eval harness itself: its deterministic checks, and a full run against a fake model that must catch a leaked salary, an unfaithful answer and a job-fit overclaim;
   - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit, which lets requests through if KV fails or hits its daily write cap, and visit-source counting;
@@ -185,6 +190,20 @@ Claude-specific handling:
 - **Structured output** via `output_config.format` for job fit.
 - **Cost** uses Anthropic's published prices, built in for current Claude models; `ANTHROPIC_PRICE_INPUT` / `ANTHROPIC_PRICE_OUTPUT` override them.
 
+## Visitor feedback
+
+Every live answer gets 👍 / 👎. A 👎 also offers an optional "what was wrong or missing?" note, up to 300 characters. `POST /api/feedback` stores the rating in `RATE_KV` for 90 days, with:
+- the question and answer;
+- the visitor's note;
+- the passages the agent saw;
+- the retrieval mode and model.
+
+No IP address is stored. The page says the question and answer are sent.
+
+**Only real answers can be rated.** Each answer arrives with a signature (`meta.fb`, an HMAC over the question and the exact text the visitor saw), keyed by `FEEDBACK_SECRET` or, failing that, a server-side API key. Feedback without a matching signature is rejected, so the store can't fill with made-up answers. That matters because 👎 entries become eval cases. Ratings count against the same per-IP hourly limit as questions.
+
+**Closing the loop:** set a `FEEDBACK_ADMIN_TOKEN` secret, then run `FEEDBACK_ADMIN_TOKEN=... node scripts/feedback.mjs`. It pulls the export (`GET /api/feedback`, bearer token; off without the secret) and prints a summary. It also writes `evals/results/feedback-candidates.json`: one draft answer-eval case per 👎, with the visitor's note, the answer given and the passages seen. Each draft needs its checks written by a person, because the note says what was wrong, not what's right. Then it moves into `evals/answers.json`.
+
 ## Cost and latency
 
 Every answer and fit check returns `usage`: model calls, input and output tokens (thinking tokens count as output), wall-clock time and, when `GEMINI_PRICE_INPUT` / `GEMINI_PRICE_OUTPUT` (USD per 1M tokens) are set, cost. Without prices, cost stays empty rather than guessed. Embedding calls aren't counted, because the API reports no usage for them. The page shows the figures in the agent trace, e.g. *1.6 s · 2,140 tokens · 2 model calls · $0.0004*, and in the job-fit note.
@@ -211,6 +230,7 @@ The live site is a Cloudflare Pages project in advanced mode, using `_worker.js`
    - Optional `ANTHROPIC_API_KEY` (secret), for the Claude fallback; `ANTHROPIC_MODEL` and `LLM_PRIMARY` tune it.
    - Optional `GEMINI_PRICE_INPUT` and `GEMINI_PRICE_OUTPUT` (USD per 1M tokens), to show cost per answer.
    - Optional Analytics Engine binding `USAGE_AE`, for cost and latency history.
+   - Optional `FEEDBACK_ADMIN_TOKEN` (secret) to export visitor feedback, and `FEEDBACK_SECRET` to sign answers with a dedicated key. Feedback itself needs `RATE_KV`.
 
 ## Updating the knowledge
 

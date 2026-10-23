@@ -352,6 +352,13 @@ body.chatting .chat{display:block}
 .trace ol{margin:8px 0 0; padding-left:20px}
 .trace li{margin-bottom:4px; overflow-wrap:anywhere}
 .trace code{font-size:.78rem; color:var(--ink-2)}
+.fb{display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:12px; font-size:.82rem; color:var(--ink-3)}
+.fb-btn{border:1px solid var(--line); background:transparent; border-radius:999px; padding:3px 11px; cursor:pointer; font-size:.95rem; line-height:1.4}
+.fb-btn:hover{border-color:var(--accent)}
+.fb-note{font-size:.76rem}
+.fb-form{display:flex; gap:8px; width:100%; margin-top:4px}
+.fb-form input{flex:1; min-width:0; border:1px solid var(--line); border-radius:999px; padding:7px 14px; font:inherit; font-size:.85rem; background:var(--panel); color:var(--ink)}
+.fb-form button{border:0; border-radius:999px; padding:7px 14px; font:inherit; font-size:.82rem; font-weight:600; cursor:pointer; background:var(--accent); color:var(--accent-ink)}
 .fu{
   padding:8px 13px; border-radius:10px; border:1px dashed var(--line);
   background:transparent; font-family:inherit; font-size:.82rem; font-weight:550;
@@ -875,6 +882,41 @@ body.chatting .dock{display:block}
     return html;
   }
 
+  // Thumbs up / down under a live answer. Shown only when the server signed the answer (meta.fb),
+  // so it can verify the rating belongs to an answer it gave.
+  function addFeedback(slot, q, text, meta) {
+    if (!meta || !meta.fb) return;
+    var box = document.createElement('div');
+    box.className = 'fb';
+    box.innerHTML = '<span>Was this helpful?</span>' +
+      '<button class="fb-btn" type="button" data-rate="up" aria-label="Helpful">&#128077;</button>' +
+      '<button class="fb-btn" type="button" data-rate="down" aria-label="Not helpful">&#128078;</button>' +
+      '<span class="fb-note">Sends this question and answer to help improve the agent.</span>';
+    var note = slot.querySelector('.note');
+    slot.insertBefore(box, note || null);
+    function send(rating, comment) {
+      box.innerHTML = '<span>Sending&#8230;</span>';
+      fetch('/api/feedback', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ rating: rating, comment: comment || '', question: q.slice(0, 1000), answer: text, token: meta.fb,
+          sources: (meta.sources || []).map(function (s) { return s.id; }), retrieval: meta.retrieval || '',
+          model: (meta.usage && meta.usage.model) || '', fallback: Boolean(meta.usage && meta.usage.fallback) })
+      }).then(function (res) {
+        box.innerHTML = '<span>' + (res.ok ? 'Thanks for the feedback.' : 'Couldn&#8217;t send feedback right now.') + '</span>';
+      }).catch(function () { box.innerHTML = '<span>Couldn&#8217;t send feedback right now.</span>'; });
+    }
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-rate]');
+      if (!b) return;
+      if (b.getAttribute('data-rate') === 'up') { send('up'); return; }
+      box.innerHTML = '<form class="fb-form"><input maxlength="300" aria-label="What was wrong or missing" placeholder="What was wrong or missing? (optional)">' +
+        '<button type="submit">Send</button></form>';
+      var form = box.querySelector('form');
+      form.addEventListener('submit', function (ev) { ev.preventDefault(); send('down', form.querySelector('input').value.trim()); });
+      form.querySelector('input').focus();
+    });
+  }
+
   function askLive(q, turn, voice) {
     var slot = turn.querySelector('.pending');
     turns.push({ role: 'user', content: q });
@@ -896,6 +938,7 @@ body.chatting .dock{display:block}
     }).then(function (r) {
       turns.push({ role: 'assistant', content: r.text });
       render(r.text, true, r.meta); scrollEnd();
+      addFeedback(slot, q, r.text, r.meta);
       if (voice) speak(r.text);
     }).catch(function (e) {
       turns.pop();

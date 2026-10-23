@@ -1409,6 +1409,91 @@ const GUARDED_ANSWER = "That's not something I can share here. Email me at hardy
 const GUARDED_EVIDENCE = "Details withheld here; email me about this requirement.";
 
 
+// ---- src/feedback.js ----
+// Visitor feedback on answers: a thumbs up or down, and an optional note on what was wrong.
+// Each answer carries a signature (meta.fb) over the question and the answer text, made with a
+// server-side secret, and feedback is accepted only with a matching one. So the store holds
+// ratings of answers the site actually gave, not text anyone can post, which matters because
+// thumbs-down entries become draft eval cases (scripts/feedback.mjs).
+
+const FEEDBACK_TTL = 60 * 60 * 24 * 90;   // seconds; entries expire after 90 days
+const MAX_COMMENT = 300;
+const MAX_ANSWER = 4000;
+const MAX_QUESTION = 1000;
+
+// FEEDBACK_SECRET when set; otherwise derived from an API key, which never leaves the server.
+function secretOf(env) {
+  return env.FEEDBACK_SECRET || env.GEMINI_API_KEY || env.ANTHROPIC_API_KEY || "";
+}
+
+async function hmacHex(secret, text) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(text)));
+  return [...sig.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Comparison that takes the same time wherever the strings first differ.
+function sameToken(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// null when no secret is available; the page then shows no feedback buttons.
+async function feedbackToken(env, question, answer) {
+  const secret = secretOf(env);
+  return secret ? hmacHex("feedback:" + secret, String(question) + "\u0000" + String(answer)) : null;
+}
+
+const clip = (s, n) => (typeof s === "string" ? s.trim().slice(0, n) : "");
+
+// Validates a POST body. Returns { entry } or { error }. Diagnostic fields (sources, retrieval,
+// model) come from the page and aren't signed; they help triage and change nothing else.
+async function feedbackEntry(env, body, now = new Date()) {
+  if (!body || (body.rating !== "up" && body.rating !== "down")) return { error: "bad_rating" };
+  const question = clip(body.question, MAX_QUESTION), answer = clip(body.answer, MAX_ANSWER + 1);
+  if (!question || !answer || answer.length > MAX_ANSWER) return { error: "bad_answer" };
+  const token = await feedbackToken(env, question, answer);
+  if (!token || !sameToken(token, body.token)) return { error: "bad_token" };
+  const ids = Array.isArray(body.sources) ? body.sources.filter((s) => typeof s === "string").slice(0, 8).map((s) => s.slice(0, 80)) : [];
+  return {
+    entry: {
+      ts: now.toISOString(),
+      rating: body.rating,
+      question,
+      answer,
+      comment: body.rating === "down" ? clip(body.comment, MAX_COMMENT) : "",
+      sources: ids,
+      retrieval: clip(body.retrieval, 20),
+      model: clip(body.model, 60),
+      fallback: Boolean(body.fallback),
+    },
+  };
+}
+
+// KV key: ISO timestamp first, so a prefix listing comes back oldest first.
+function feedbackKey(entry) {
+  return `fb:${entry.ts}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Thumbs-down entries as draft answer-eval cases. The checks are left for a person to write:
+// the visitor's note says what was wrong, not what the right answer is.
+function toEvalCandidates(entries) {
+  return entries.filter((e) => e.rating === "down").map((e, i) => ({
+    id: `fb-${e.ts.slice(0, 10)}-${i + 1}`,
+    category: "feedback",
+    q: e.question,
+    TODO: "Add any / all / none / sources checks from what the right answer must contain, then move into evals/answers.json.",
+    visitor_comment: e.comment || null,
+    answer_given: e.answer,
+    sources_seen: e.sources,
+    model: e.model,
+  }));
+}
+
+
 // ---- src/fit.js ----
 // "Paste a job description": how well does Hardyal fit this role, requirement by requirement?
 // A bounded pipeline, not an open loop: one structured-output call extracts the requirements,
@@ -1583,6 +1668,7 @@ async function assessFit({ jd, index, env, fetchImpl = fetch }) {
 //   POST /api/ask     the portfolio agent (Gemini function calling + hybrid RAG)
 //   POST /api/fit     job-description fit: { jd } -> requirement-by-requirement match with sources
 //   GET  /api/search  retrieval only, no LLM call: ?q=... returns the top passages
+//   POST /api/feedback  thumbs up/down on an answer (needs RATE_KV); GET exports it (FEEDBACK_ADMIN_TOKEN)
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
 //           ANTHROPIC_API_KEY (optional): Claude answers when Gemini fails; ANTHROPIC_MODEL picks the
@@ -1636,6 +1722,11 @@ async function handle(request, env, fetchImpl) {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
       return await fit(request, env, fetchImpl);
     }
+    if (url.pathname === "/api/feedback") {
+      if (request.method === "POST") return await feedback(request, env);
+      if (request.method === "GET") return await feedbackExport(request, env, url);
+      return json(405, { error: "method_not_allowed" });
+    }
     if (url.pathname === "/api/search") {
       if (request.method !== "GET") return json(405, { error: "method_not_allowed" });
       return await searchOnly(request, env, url, fetchImpl);
@@ -1671,10 +1762,13 @@ async function ask(request, env, fetchImpl) {
   const guard = guardText(result.text, [SYSTEM]);
   if (guard) console.warn(JSON.stringify({ event: "guard", kind: "ask", reason: guard }));
   recordUsage(env, "ask", result.usage, result.retrieval, body.ref, guard);
+  const text = guard ? GUARDED_ANSWER : result.text;
   const meta = guard
     ? { sources: [], steps: result.steps, retrieval: result.retrieval, usage: result.usage, guarded: true }
     : { sources: result.sources, steps: result.steps, retrieval: result.retrieval, usage: result.usage };
-  return new Response((guard ? GUARDED_ANSWER : result.text) + SEP + JSON.stringify(meta), {
+  // Signs exactly what the visitor saw, so feedback can only rate answers the site gave.
+  if (env.RATE_KV) meta.fb = await feedbackToken(env, turns[turns.length - 1].content, text);
+  return new Response(text + SEP + JSON.stringify(meta), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
   });
 }
@@ -1711,6 +1805,42 @@ async function fit(request, env, fetchImpl) {
   await countSource(env, request, "fit", body.ref);
   recordUsage(env, "fit", result.usage, result.retrieval, body.ref, guard);
   return json(200, result);
+}
+
+async function feedback(request, env) {
+  if (!sameOrigin(request)) return json(403, { error: "forbidden" });
+  if (!env.RATE_KV) return json(503, { error: "not_configured" });
+  let body;
+  try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }
+  const { entry, error } = await feedbackEntry(env, body);
+  if (error) return json(400, { error });
+  if (!(await underLimit(env.RATE_KV, request))) return json(429, { error: "rate_limited" });
+  try {
+    await env.RATE_KV.put(feedbackKey(entry), JSON.stringify(entry), { expirationTtl: FEEDBACK_TTL });
+  } catch (err) {
+    console.warn("feedback not stored:", err && err.message);
+    return json(503, { error: "storage" });
+  }
+  console.log(JSON.stringify({ event: "feedback", rating: entry.rating }));
+  return json(200, { ok: true });
+}
+
+// Export for scripts/feedback.mjs: Authorization: Bearer <FEEDBACK_ADMIN_TOKEN>. Off (404) when the
+// token isn't set. Newest first, at most ?limit= (default 200) entries.
+async function feedbackExport(request, env, url) {
+  if (!env.FEEDBACK_ADMIN_TOKEN || !env.RATE_KV) return json(404, { error: "not_found" });
+  const auth = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!sameToken(auth, env.FEEDBACK_ADMIN_TOKEN)) return json(401, { error: "unauthorized" });
+  const limit = Math.min(1000, Math.max(1, parseInt(url.searchParams.get("limit") || "200", 10) || 200));
+  const names = [];
+  let cursor;
+  do {
+    const page = await env.RATE_KV.list({ prefix: "fb:", cursor });
+    names.push(...page.keys.map((k) => k.name));
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  const entries = (await Promise.all(names.slice(-limit).reverse().map((n) => env.RATE_KV.get(n, "json").catch(() => null)))).filter(Boolean);
+  return json(200, { count: entries.length, entries });
 }
 
 async function searchOnly(request, env, url, fetchImpl) {

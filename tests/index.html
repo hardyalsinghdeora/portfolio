@@ -33,6 +33,7 @@ import { handle, validTurns, SEP, recordUsage } from "../src/worker.js";
 import { assessFit, JD_MIN, JD_MAX } from "../src/fit.js";
 import { PHONE, REDLINES, COMPENSATION, guardText, LEAK_WORDS } from "../src/guard.js";
 import { claudeAgent, toJsonSchema, runAgentWithFallback, CLAUDE_VERSION } from "../src/providers.js";
+import { feedbackToken, toEvalCandidates, FEEDBACK_TTL, MAX_COMMENT } from "../src/feedback.js";
 import { checkAnswer, runEvals, scorecardMarkdown, failed as runFailed } from "../evals/harness.mjs";
 import { buildListings, listingsMarkdown, LIMITS } from "../scripts/listings.mjs";
 
@@ -403,6 +404,59 @@ await test("fallback: Gemini failure reruns on Claude, for answers and job fit",
   const fmt = fitCalls[1].body.output_config.format;
   eq(fmt.type, "json_schema"); eq(fmt.schema.additionalProperties, false); eq(fmt.schema.properties.results.items.additionalProperties, false);
   eq(fit.usage.fallback.from, "gemini"); eq(fit.usage.model, "claude-opus-5-5");
+});
+// In-memory KV with the parts of the API the Worker uses, including list() and put options.
+function memKV() {
+  const data = new Map(), opts = new Map();
+  return { data, opts,
+    get: async (k, type) => { const v = data.get(k); return v == null ? null : type === "json" ? JSON.parse(v) : v; },
+    put: async (k, v, o) => { data.set(k, v); opts.set(k, o); },
+    list: async ({ prefix }) => ({ keys: [...data.keys()].filter((k) => k.startsWith(prefix)).sort().map((name) => ({ name })), list_complete: true }),
+  };
+}
+await test("feedback: answers are signed, and only signed answers can be rated", async () => {
+  const kv = memKV();
+  const E = { ...env, ASSETS: assets, RATE_KV: kv };
+  const script = [[{ functionCall: { name: "search_profile", args: { query: "x" } } }], [{ text: "I build bounded agents." }]];
+  const asked = await handle(post({ messages: turns }), E, mockGemini({ script }));
+  const [answer, metaRaw] = (await asked.text()).split(SEP);
+  const meta = JSON.parse(metaRaw);
+  eq(meta.fb, await feedbackToken(env, turns[0].content, answer)); eq(meta.fb.length, 32);
+  const noKv = JSON.parse((await (await handle(post({ messages: turns }), { ...env, ASSETS: assets }, mockGemini({ script }))).text()).split(SEP)[1]);
+  assert(!("fb" in noKv), "no feedback store, no buttons");
+
+  const fb = (body, extra = {}) => handle(req("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { ...E, ...extra }, mockGemini());
+  const base = { question: turns[0].content, answer, token: meta.fb, sources: ["agentic-overview"], retrieval: "bm25", model: "gemini-x" };
+  eq((await fb({ ...base, rating: "up", comment: "ignored on a thumbs up" })).status, 200);
+  eq((await fb({ ...base, rating: "down", comment: "x".repeat(500) })).status, 200);
+  const stored = [...kv.data.entries()].filter(([k]) => k.startsWith("fb:"));
+  eq(stored.length, 2); eq(kv.opts.get(stored[0][0]).expirationTtl, FEEDBACK_TTL);
+  const up = JSON.parse(stored.find(([, v]) => v.includes('"up"'))[1]), down = JSON.parse(stored.find(([, v]) => v.includes('"down"'))[1]);
+  eq(up.comment, ""); eq(down.comment.length, MAX_COMMENT); eq(down.answer, answer); eq(down.sources[0], "agentic-overview");
+  assert(!JSON.stringify(down).includes("203.0.113"), "no IP stored");
+
+  eq((await fb({ ...base, rating: "down", answer: "I have 20 years of Rust." })).status, 400, "forged answer rejected");
+  eq((await fb({ ...base, rating: "meh" })).status, 400);
+  eq((await fb({ ...base, rating: "up" }, { RATE_KV: undefined })).status, 503);
+  eq((await handle(req("/api/feedback", { method: "PUT" }), E, mockGemini())).status, 405);
+  const crossSite = { url: "https://hardyalsinghdeora.pages.dev/api/feedback", method: "POST", headers: new Headers({ origin: "https://evil.example" }), json: async () => ({ ...base, rating: "up" }) };
+  eq((await handle(crossSite, E, mockGemini())).status, 403);
+  const busy = memKV(); busy.get = async () => "30";
+  eq((await fb({ ...base, rating: "up" }, { RATE_KV: busy })).status, 429);
+});
+await test("feedback: token-protected export, newest first, and draft eval cases", async () => {
+  const kv = memKV();
+  for (const [ts, rating] of [["2026-10-20T10:00:00.000Z", "down"], ["2026-10-22T10:00:00.000Z", "up"]]) {
+    await kv.put(`fb:${ts}:abc`, JSON.stringify({ ts, rating, question: "q " + ts, answer: "a", comment: rating === "down" ? "wrong notice period" : "", sources: [], model: "m" }));
+  }
+  const exp = (headers, extra = {}) => handle(req("/api/feedback", { headers }), { ...env, ASSETS: assets, RATE_KV: kv, ...extra }, mockGemini());
+  eq((await exp({})).status, 404, "off without FEEDBACK_ADMIN_TOKEN");
+  eq((await exp({ authorization: "Bearer nope" }, { FEEDBACK_ADMIN_TOKEN: "s3cret-token" })).status, 401);
+  const ok = await exp({ authorization: "Bearer s3cret-token" }, { FEEDBACK_ADMIN_TOKEN: "s3cret-token" });
+  const data = await ok.json();
+  eq(ok.status, 200); eq(data.count, 2); eq(data.entries[0].rating, "up", "newest first");
+  const drafts = toEvalCandidates(data.entries);
+  eq(drafts.length, 1); eq(drafts[0].id, "fb-2026-10-20-1"); eq(drafts[0].visitor_comment, "wrong notice period"); eq(drafts[0].category, "feedback");
 });
 await test("worker: errors and guards", async () => {
   const E = { ...env, ASSETS: assets };

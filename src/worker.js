@@ -2,6 +2,7 @@
 //   POST /api/ask     the portfolio agent (Gemini function calling + hybrid RAG)
 //   POST /api/fit     job-description fit: { jd } -> requirement-by-requirement match with sources
 //   GET  /api/search  retrieval only, no LLM call: ?q=... returns the top passages
+//   POST /api/feedback  thumbs up/down on an answer (needs RATE_KV); GET exports it (FEEDBACK_ADMIN_TOKEN)
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
 //           ANTHROPIC_API_KEY (optional): Claude answers when Gemini fails; ANTHROPIC_MODEL picks the
@@ -19,6 +20,7 @@ import { buildChunks, buildIndex, search } from "./rag.js";
 import { SYSTEM } from "./agent.js";
 import { runAgentWithFallback } from "./providers.js";
 import { guardText, GUARDED_ANSWER, GUARDED_EVIDENCE } from "./guard.js";
+import { feedbackToken, feedbackEntry, feedbackKey, sameToken, FEEDBACK_TTL } from "./feedback.js";
 import { assessFit, JD_MIN, JD_MAX } from "./fit.js";
 
 const MAX_TURNS = 10;          // matches the page, which keeps the last 10 turns
@@ -61,6 +63,11 @@ export async function handle(request, env, fetchImpl) {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
       return await fit(request, env, fetchImpl);
     }
+    if (url.pathname === "/api/feedback") {
+      if (request.method === "POST") return await feedback(request, env);
+      if (request.method === "GET") return await feedbackExport(request, env, url);
+      return json(405, { error: "method_not_allowed" });
+    }
     if (url.pathname === "/api/search") {
       if (request.method !== "GET") return json(405, { error: "method_not_allowed" });
       return await searchOnly(request, env, url, fetchImpl);
@@ -96,10 +103,13 @@ async function ask(request, env, fetchImpl) {
   const guard = guardText(result.text, [SYSTEM]);
   if (guard) console.warn(JSON.stringify({ event: "guard", kind: "ask", reason: guard }));
   recordUsage(env, "ask", result.usage, result.retrieval, body.ref, guard);
+  const text = guard ? GUARDED_ANSWER : result.text;
   const meta = guard
     ? { sources: [], steps: result.steps, retrieval: result.retrieval, usage: result.usage, guarded: true }
     : { sources: result.sources, steps: result.steps, retrieval: result.retrieval, usage: result.usage };
-  return new Response((guard ? GUARDED_ANSWER : result.text) + SEP + JSON.stringify(meta), {
+  // Signs exactly what the visitor saw, so feedback can only rate answers the site gave.
+  if (env.RATE_KV) meta.fb = await feedbackToken(env, turns[turns.length - 1].content, text);
+  return new Response(text + SEP + JSON.stringify(meta), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
   });
 }
@@ -136,6 +146,42 @@ async function fit(request, env, fetchImpl) {
   await countSource(env, request, "fit", body.ref);
   recordUsage(env, "fit", result.usage, result.retrieval, body.ref, guard);
   return json(200, result);
+}
+
+async function feedback(request, env) {
+  if (!sameOrigin(request)) return json(403, { error: "forbidden" });
+  if (!env.RATE_KV) return json(503, { error: "not_configured" });
+  let body;
+  try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }
+  const { entry, error } = await feedbackEntry(env, body);
+  if (error) return json(400, { error });
+  if (!(await underLimit(env.RATE_KV, request))) return json(429, { error: "rate_limited" });
+  try {
+    await env.RATE_KV.put(feedbackKey(entry), JSON.stringify(entry), { expirationTtl: FEEDBACK_TTL });
+  } catch (err) {
+    console.warn("feedback not stored:", err && err.message);
+    return json(503, { error: "storage" });
+  }
+  console.log(JSON.stringify({ event: "feedback", rating: entry.rating }));
+  return json(200, { ok: true });
+}
+
+// Export for scripts/feedback.mjs: Authorization: Bearer <FEEDBACK_ADMIN_TOKEN>. Off (404) when the
+// token isn't set. Newest first, at most ?limit= (default 200) entries.
+async function feedbackExport(request, env, url) {
+  if (!env.FEEDBACK_ADMIN_TOKEN || !env.RATE_KV) return json(404, { error: "not_found" });
+  const auth = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!sameToken(auth, env.FEEDBACK_ADMIN_TOKEN)) return json(401, { error: "unauthorized" });
+  const limit = Math.min(1000, Math.max(1, parseInt(url.searchParams.get("limit") || "200", 10) || 200));
+  const names = [];
+  let cursor;
+  do {
+    const page = await env.RATE_KV.list({ prefix: "fb:", cursor });
+    names.push(...page.keys.map((k) => k.name));
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  const entries = (await Promise.all(names.slice(-limit).reverse().map((n) => env.RATE_KV.get(n, "json").catch(() => null)))).filter(Boolean);
+  return json(200, { count: entries.length, entries });
 }
 
 async function searchOnly(request, env, url, fetchImpl) {

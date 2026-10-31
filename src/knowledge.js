@@ -2,7 +2,7 @@
 export const PROFILE = {
   "meta": {
     "purpose": "Machine-readable career profile for recruiters and hiring managers",
-    "updated": "2026-10-18",
+    "updated": "2026-10-31",
     "human_versions": {
       "portfolio": "https://hardyalsinghdeora.pages.dev/",
       "resume": "https://hardyalsinghdeora.github.io/case-studies/resume.html",
@@ -258,7 +258,7 @@ export const PROFILE = {
       "Kafka / event streaming: topics, partitions, consumer groups; production event-driven work has used AWS SQS queues"
     ],
     "ai_stack": [
-      "LangChain / LangGraph: built small apps with them; production agents so far are hand-rolled tool-calling loops (MCP, Gemini function calling)",
+      "LangChain / LangGraph: built small apps with them, most fully the open-source Ops Copilot (supervisor, specialist and reviewer agents, interrupt-based human approval); production agents so far are hand-rolled tool-calling loops (MCP, Gemini function calling)",
       "Vector databases (pgvector, Pinecone, Chroma): working level; the portfolio agent uses in-memory vectors because ~50 chunks don't need a database",
       "AWS Bedrock / Google Vertex AI: called models through both; production LLM calls so far go to provider APIs directly (Gemini, Claude, OpenAI realtime)",
       "LLM evaluation (LLM-as-judge, RAGAS-style metrics): working level; the portfolio ships a retrieval eval set measuring hit@1 and hit@5"
@@ -580,6 +580,21 @@ export const PROFILE = {
     {
       "name": "Engineering-ops automation skills",
       "summary": "A set of reusable agent skills built for the squad: PR inbox (open PRs by author/reviewer), PR review, build-release email generation from Jira fix-versions, sprint/monthly squad briefings from Jira + Confluence, personal sprint retrospectives, Jira ticket creation from conversation, and an actionable-email rewriter for system alerts."
+    },
+    {
+      "name": "Ops Copilot (multi-agent RAG + MCP learning project)",
+      "status": "Shipped, open source; learning project on synthetic data",
+      "url": "https://github.com/hardyalsinghdeora/ops-copilot",
+      "summary": "An on-call assistant I built to learn LangGraph and MCP end to end, on a synthetic knowledge base for a fictional platform. A LangGraph supervisor routes each request to one of three specialist agents (knowledge Q&A, incident triage, release notes), each a bounded ReAct loop on Claude scoped to only the MCP tools it needs. Two FastMCP servers expose hybrid retrieval (ChromaDB vectors + BM25, reciprocal rank fusion, chunk-level citations) and ops data (alerts, deployments, tickets, service catalogue). An LLM-as-judge reviewer checks every draft against the raw evidence with a capped revision loop, and filing a ticket pauses the graph with interrupt() until a human approves. Ships an eval harness (hit@k, MRR, BM25 vs vector vs hybrid comparison, judge faithfulness), offline tests with scripted models, CI, and an 8-chapter self-study course in docs/.",
+      "topics": [
+        "langgraph",
+        "mcp",
+        "rag",
+        "multi-agent",
+        "human-in-the-loop",
+        "llm-evaluation",
+        "claude"
+      ]
     }
   ],
   "linkedin": {

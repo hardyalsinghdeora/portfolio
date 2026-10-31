@@ -234,7 +234,7 @@
       "Speech-to-text evaluation (contributed)"
     ],
     "integrations": [
-      "Zoho CRM and Zoho Books (OAuth 2.0)",
+      "CRM and accounting system integrations (OAuth 2.0)",
       "Low-code platform scripting (finance records)",
       "Partner CRM (versioned API)",
       "Finance & HR system adapters",
@@ -317,7 +317,7 @@
         "Ran a PHP 5.3 → 7.3 migration moving the full user base off deprecated servers; reworked CI/CD on Bitbucket Pipelines, cutting deployment time.",
         "Shipped a versioned partner CRM integration with published API docs; delivered a tenth regional language with offline distribution, automated user transfer, annual class upgrade and credential revocation in the sync mechanism.",
         "Guided engineers through design review and technical specification writing; owned stakeholder communication across product and engineering.",
-        "Integrated Zoho CRM and Zoho Books using OAuth 2.0.",
+        "Integrated CRM and accounting systems using OAuth 2.0.",
         "Used MongoDB as the backend of a major project from 2020 to 2024, and Redis for microservice login, authentication and rate limiting."
       ]
     },

@@ -5,7 +5,7 @@
 const PROFILE = {
   "meta": {
     "purpose": "Machine-readable career profile for recruiters and hiring managers",
-    "updated": "2026-10-18",
+    "updated": "2026-10-31",
     "human_versions": {
       "portfolio": "https://hardyalsinghdeora.pages.dev/",
       "resume": "https://hardyalsinghdeora.github.io/case-studies/resume.html",
@@ -187,28 +187,33 @@ const PROFILE = {
       "Node.js",
       "Hono",
       "Express",
+      "NestJS (small projects)",
       "Python",
       "PHP",
       "C++ (DSA/problem solving)",
-      "SQL"
+      "SQL",
+      "Polyglot: production code in TypeScript, PHP and Python"
     ],
     "data": [
       "PostgreSQL",
       "MySQL",
-      "Redis",
-      "MongoDB",
+      "Redis (microservice login, authentication, rate limiting)",
+      "MongoDB (backend of a major project, 2020 to 2024)",
+      "Elasticsearch (application reports, with RabbitMQ feeding the data)",
+      "ClickHouse (data warehouse)",
       "jsonb + GIN indexing",
       "Postgres enums",
       "Schema namespacing",
       "Soft-delete & audit column conventions"
     ],
     "cloud_delivery": [
-      "AWS (S3, CloudFront, SQS, RDS)",
+      "AWS (EC2, Lambda, S3, CloudFront, SQS, RDS)",
       "Cloudflare Workers, Pages and KV",
       "Azure",
       "Docker",
       "CI/CD",
-      "Bitbucket Pipelines"
+      "Bitbucket Pipelines",
+      "RabbitMQ"
     ],
     "frontend": [
       "Angular",
@@ -234,6 +239,7 @@ const PROFILE = {
       "Speech-to-text evaluation (contributed)"
     ],
     "integrations": [
+      "CRM and accounting system integrations (OAuth 2.0)",
       "Low-code platform scripting (finance records)",
       "Partner CRM (versioned API)",
       "Finance & HR system adapters",
@@ -251,6 +257,20 @@ const PROFILE = {
       "SAFe",
       "Sprint planning & backlog grooming",
       "Monthly leadership reporting"
+    ],
+    "engineering_practice": [
+      "Unit testing",
+      "Integration testing",
+      "Effort estimation (story points / t-shirt sizing) in sprint and release planning",
+      "Change management: release gating, rollout and rollback plans for production changes",
+      "Technology strategy: build-vs-buy and stack decisions with leadership",
+      "Technical due diligence of codebases, vendors and tools before adoption",
+      "Technical consulting for internal business units and clients",
+      "Discovery workshops with stakeholders and clients"
+    ],
+    "monitoring": [
+      "Grafana and Sentry server monitoring dashboards",
+      "Production issue log in a database, emailed at end of day with server and application logs"
     ]
   },
   "working_familiarity": {
@@ -265,6 +285,9 @@ const PROFILE = {
       "Vector databases (pgvector, Pinecone, Chroma): working level; the portfolio agent uses in-memory vectors because ~50 chunks don't need a database",
       "AWS Bedrock / Google Vertex AI: called models through both; production LLM calls so far go to provider APIs directly (Gemini, Claude, OpenAI realtime)",
       "LLM evaluation (LLM-as-judge, RAGAS-style metrics): working level; the portfolio ships a retrieval eval set measuring hit@1 and hit@5"
+    ],
+    "studied_for_interviews": [
+      "Go, Vue.js, Firestore, Google Pub/Sub, sharding, Redis Streams and distributed tracing: studied for interviews, not run in production"
     ]
   },
   "architectural_defaults": [
@@ -308,7 +331,9 @@ const PROFILE = {
         "Designed and led a strangler migration of a live PHP/MySQL application to Node.js microservices on PostgreSQL with an Angular UI: 70 pages across 12 modules in 3 months with 2 developers. Shared login (PHP session plus JWT), per-module MySQL write flags so both databases stayed current, no user-visible interruption; legacy PHP app retired.",
         "Ran a PHP 5.3 → 7.3 migration moving the full user base off deprecated servers; reworked CI/CD on Bitbucket Pipelines, cutting deployment time.",
         "Shipped a versioned partner CRM integration with published API docs; delivered a tenth regional language with offline distribution, automated user transfer, annual class upgrade and credential revocation in the sync mechanism.",
-        "Guided engineers through design review and technical specification writing; owned stakeholder communication across product and engineering."
+        "Guided engineers through design review and technical specification writing; owned stakeholder communication across product and engineering.",
+        "Integrated CRM and accounting systems using OAuth 2.0.",
+        "Used MongoDB as the backend of a major project from 2020 to 2024, and Redis for microservice login, authentication and rate limiting."
       ]
     },
     {
@@ -462,7 +487,15 @@ const PROFILE = {
       "Coupled logout must tear down both session mechanisms every time"
     ],
     "outcome": "70 pages across 12 modules moved from PHP/MySQL to Node.js microservices, PostgreSQL and Angular in 3 months with 2 developers led by me; no user-visible interruption; the legacy PHP application is fully retired, and MySQL stays current through the per-module flags until the remaining products move to PostgreSQL.",
-    "patterns": ["Strangler fig", "Microservices", "Feature flags per module", "Session/token bridging (PHP session + JWT)", "Parallel run on two databases", "APIs before UI", "Legacy feature freeze"]
+    "patterns": [
+      "Strangler fig",
+      "Microservices",
+      "Feature flags per module",
+      "Session/token bridging (PHP session + JWT)",
+      "Parallel run on two databases",
+      "APIs before UI",
+      "Legacy feature freeze"
+    ]
   },
   "current_focus_2026": [
     "Made the commercial platform the single system of record for client, order, payment and subscription; drove cross-team consolidation of scattered endpoints into one versioned service",
@@ -558,7 +591,15 @@ const PROFILE = {
         "Safe defaults: dry-run and read-only unless explicitly overridden",
         "Token efficiency: compact output and cheap offline lookups over live queries"
       ],
-      "topics": ["ai-assisted-development", "claude", "cli", "developer-tools", "macos", "mcp", "secrets-management"]
+      "topics": [
+        "ai-assisted-development",
+        "claude",
+        "cli",
+        "developer-tools",
+        "macos",
+        "mcp",
+        "secrets-management"
+      ]
     },
     {
       "name": "Automated code-review pipeline",
@@ -583,6 +624,18 @@ const PROFILE = {
     {
       "name": "Engineering-ops automation skills",
       "summary": "A set of reusable agent skills built for the squad: PR inbox (open PRs by author/reviewer), PR review, build-release email generation from Jira fix-versions, sprint/monthly squad briefings from Jira + Confluence, personal sprint retrospectives, Jira ticket creation from conversation, and an actionable-email rewriter for system alerts."
+    },
+    {
+      "name": "ops-copilot",
+      "status": "Public",
+      "url": "https://github.com/hardyalsinghdeora/ops-copilot",
+      "summary": "A multi-agent assistant for on-call engineers built on Claude, LangGraph and MCP: hybrid retrieval over runbooks with citations, a reviewer agent that checks answers against evidence, human approval before anything writes to the world, and retrieval evals in CI."
+    },
+    {
+      "name": "Interview prep kit (fde-interview-prep)",
+      "status": "Public",
+      "url": "https://github.com/hardyalsinghdeora/fde-interview-prep/blob/main/roles/README.md",
+      "summary": "An interview prep kit for Forward Deployed Engineer, Solutions and Applied AI roles: 17 roles compared, each with its interview loop, model answers and a 6-week study plan, plus 17 shared topic sections with more than 1,150 answered questions."
     }
   ],
   "linkedin": {
@@ -610,12 +663,24 @@ const PROFILE = {
         "Engineering Manager",
         "Senior Software Engineer"
       ],
-      "location_types": ["On-site", "Hybrid", "Remote"],
-      "on_site_locations": ["Pune Division", "Bengaluru", "Hyderabad"],
-      "remote_locations": ["Ahmedabad"],
+      "location_types": [
+        "On-site",
+        "Hybrid",
+        "Remote"
+      ],
+      "on_site_locations": [
+        "Pune Division",
+        "Bengaluru",
+        "Hyderabad"
+      ],
+      "remote_locations": [
+        "Ahmedabad"
+      ],
       "notice_period": "30 days",
       "start_date": "Immediately; actively applying",
-      "employment_types": ["Full-time"]
+      "employment_types": [
+        "Full-time"
+      ]
     }
   },
   "working_principles": [

@@ -188,7 +188,8 @@ export const PROFILE = {
       "Python",
       "PHP",
       "C++ (DSA/problem solving)",
-      "SQL"
+      "SQL",
+      "Polyglot: production code in TypeScript, PHP and Python"
     ],
     "data": [
       "PostgreSQL",
@@ -203,7 +204,7 @@ export const PROFILE = {
       "Soft-delete & audit column conventions"
     ],
     "cloud_delivery": [
-      "AWS (S3, CloudFront, SQS, RDS)",
+      "AWS (EC2, Lambda, S3, CloudFront, SQS, RDS)",
       "Cloudflare Workers, Pages and KV",
       "Azure",
       "Docker",
@@ -253,6 +254,16 @@ export const PROFILE = {
       "SAFe",
       "Sprint planning & backlog grooming",
       "Monthly leadership reporting"
+    ],
+    "engineering_practice": [
+      "Unit testing",
+      "Integration testing",
+      "Effort estimation (story points / t-shirt sizing) in sprint and release planning",
+      "Change management: release gating, rollout and rollback plans for production changes",
+      "Technology strategy: build-vs-buy and stack decisions with leadership",
+      "Technical due diligence of codebases, vendors and tools before adoption",
+      "Technical consulting for internal business units and clients",
+      "Discovery workshops with stakeholders and clients"
     ],
     "monitoring": [
       "Grafana and Sentry server monitoring dashboards",

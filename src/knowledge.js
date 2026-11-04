@@ -657,10 +657,9 @@ export const PROFILE = {
       ]
     },
     {
-      "name": "Interview prep kit (fde-interview-prep)",
-      "status": "Public",
-      "url": "https://github.com/hardyalsinghdeora/fde-interview-prep/blob/main/roles/README.md",
-      "summary": "An interview prep kit for Forward Deployed Engineer, Solutions and Applied AI roles: 17 roles compared, each with its interview loop, model answers and a 6-week study plan, plus 17 shared topic sections with more than 1,150 answered questions."
+      "name": "Interview prep kit (ai-interview-prep)",
+      "status": "Private repository; happy to walk through it on a call",
+      "summary": "An interview prep kit for Forward Deployed Engineer, Solutions and Applied AI roles, plus the core engineering track (backend SDE, Tech Lead, Engineering Manager): 20 roles compared, each with its interview loop, model answers and a 6-week study plan; 17 shared topic sections with more than 1,150 answered questions; 55 question lists by skill (about 2,200 questions); and 35 cheatsheets defining more than 3,000 technical and business terms."
     }
   ],
   "linkedin": {

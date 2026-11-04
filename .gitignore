@@ -3,3 +3,5 @@
 node_modules/
 *.log
 evals/results/
+# Private recruiter/owner knowledge: uploaded to KV by scripts/private-kb.mjs, never committed.
+knowledge/private/

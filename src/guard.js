@@ -28,11 +28,15 @@ function shingles(prompt) {
 
 // Returns the reason text must not be shown ("redline", "phone", "compensation", "prompt_leak"),
 // or null when it's fine. prompts: system prompts whose wording must not be echoed back.
-export function guardText(text, prompts = []) {
+// tier (src/tiers.js) relaxes what the signed-in viewer may see: an approved recruiter may read
+// internal names and company numbers but never compensation; the owner may read both. Phone
+// numbers and prompt leaks are blocked for everyone.
+export function guardText(text, prompts = [], tier = "public") {
   const s = String(text || "");
-  if (REDLINES.test(s)) return "redline";
+  const insider = tier === "recruiter" || tier === "owner";
+  if (!insider && REDLINES.test(s)) return "redline";
   if (PHONE.test(s)) return "phone";
-  if (COMPENSATION.test(s)) return "compensation";
+  if (tier !== "owner" && COMPENSATION.test(s)) return "compensation";
   if (prompts.length) {
     const w = words(s);
     for (let i = 0; i + LEAK_WORDS <= w.length; i++) {

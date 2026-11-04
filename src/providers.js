@@ -61,7 +61,7 @@ async function claudeRequest(env, body, fetchImpl) {
 // - The assistant turn is appended verbatim, thinking blocks included: they must be sent back
 //   unchanged, and the transcript is only ever appended to.
 // - No temperature: API version 2026-10-21 rejects sampling parameters.
-export function claudeAgent(env, fetchImpl) {
+export function claudeAgent(env, fetchImpl, system = SYSTEM) {
   const model = env.ANTHROPIC_MODEL || CLAUDE_DEFAULT_MODEL;
   const tools = TOOLS[0].functionDeclarations.map((f) => ({
     name: f.name, description: f.description, input_schema: toJsonSchema(f.parameters), strict: true,
@@ -74,7 +74,7 @@ export function claudeAgent(env, fetchImpl) {
     },
     async step(mode) {
       const data = await claudeRequest(env, {
-        model, max_tokens: 16000, system: SYSTEM, tools,
+        model, max_tokens: 16000, system, tools,
         tool_choice: { type: mode === "final" ? "none" : "auto" },
         messages,
       }, fetchImpl);
@@ -148,11 +148,16 @@ export async function withFallback(env, attempts) {
   }
 }
 
+// opts.system: the tier's system prompt (agent.js systemFor). opts.models: the router's choice
+// (router.js modelsFor); without it each provider uses its configured model, as before.
 export async function runAgentWithFallback(opts) {
-  const { env, fetchImpl = fetch } = opts;
+  const { env, fetchImpl = fetch, system = SYSTEM, models } = opts;
+  const gemini = (model) => runAgent({ ...opts, fetchImpl, provider: geminiAgent(model ? { ...env, GEMINI_MODEL: model } : env, fetchImpl, system) });
+  const claude = (model) => runAgent({ ...opts, fetchImpl, provider: claudeAgent(model ? { ...env, ANTHROPIC_MODEL: model } : env, fetchImpl, system) });
   const { value, fallback } = await withFallback(env, [
-    { name: "gemini", ok: Boolean(env.GEMINI_API_KEY), run: () => runAgent({ ...opts, fetchImpl, provider: geminiAgent(env, fetchImpl) }) },
-    { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: () => runAgent({ ...opts, fetchImpl, provider: claudeAgent(env, fetchImpl) }) },
+    { name: "gemini", ok: Boolean(env.GEMINI_API_KEY), run: () => gemini(models && models.gemini) },
+    { name: "gemini", ok: Boolean(env.GEMINI_API_KEY && models && models.geminiFallback), run: () => gemini(models.geminiFallback) },
+    { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: () => claude(models && models.claude) },
   ]);
   if (fallback) value.usage.fallback = fallback;
   return value;

@@ -2,7 +2,7 @@
 # LinkedIn and Naukri text
 
 Paste these into the job sites so they say what the portfolio says. Regenerated on every build,
-from profile data updated 2026-10-18.
+from profile data updated 2026-11-04.
 
 ## LinkedIn
 
@@ -18,7 +18,7 @@ Agentic AI Architect & Principal Software Engineer | LLM agents, MCP tool use, h
 ```text
 I build LLM agents that are safe to leave running: grounded in retrieved evidence, bounded in steps and cost, least-privilege by default, and auditable, on fifteen years of production backend engineering.
 
-Agentic AI Architect and Principal Software Engineer. I design and ship LLM systems end to end: a hybrid-RAG agent with Gemini function calling and a retrieval eval set (my portfolio site), an unattended MCP-based pull-request review agent that runs every 30 minutes at work, a code-review tool that puts Anthropic Claude, Google Gemini and local Ollama models behind one structured-output interface, an MCP server for image generation, and guardrail and token-cost tooling for AI coding agents. Underneath that is 15 years in backend and distributed systems, specialising in commerce, billing and order-to-cash platforms for a B2B education business. Owns architecture across 12+ domain services behind a single API gateway and writes the technical specifications other engineers execute. Directed a live MySQL-to-PostgreSQL migration across six product lines with no maintenance window, and designed the finance-auditable billing, discounting and invoicing models the commercial platform runs on. Six years leading engineering teams: sprint delivery, code review as the quality bar, onboarding design and mentoring across several squads.
+Agentic AI Architect and Principal Software Engineer. I design and ship LLM systems end to end: a hybrid-RAG agent with Gemini function calling and a retrieval eval set (my portfolio site), an unattended MCP-based pull-request review agent that runs every 30 minutes at work, a code-review tool that puts Anthropic Claude, Google Gemini and local Ollama models behind one structured-output interface, an MCP server for image generation, and guardrail and token-cost tooling for AI coding agents. Underneath that is 15 years in backend and distributed systems, specialising in commerce, billing and order-to-cash platforms for a B2B education business. Owns architecture across 12+ domain services behind a single API gateway and writes the technical specifications other engineers execute. Directed a MySQL-to-PostgreSQL migration across six product lines designed to run with no maintenance window (partly live; the remaining product lines are built and in pilot), and designed the finance-auditable billing, discounting and invoicing models the commercial platform runs on. Six years leading engineering teams: sprint delivery, code review as the quality bar, onboarding design and mentoring across several squads.
 
 In numbers:
 • 3 LLM providers (Anthropic Claude, Google Gemini, local Ollama) behind one structured-output code-review interface
@@ -32,7 +32,7 @@ Decision records: https://hardyalsinghdeora.pages.dev/case/db-migration and http
 
 Open to Agentic AI Architect and AI Platform / AI Technical Architect roles. Notice period 30 days. Email: hardyalsinghdeora@gmail.com
 ```
-2147 / 2600 characters
+2224 / 2600 characters
 
 **Skills to add** (in the profile, missing from LinkedIn's listed skills)
 

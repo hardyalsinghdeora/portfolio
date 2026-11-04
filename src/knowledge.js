@@ -2,7 +2,7 @@
 export const PROFILE = {
   "meta": {
     "purpose": "Machine-readable career profile for recruiters and hiring managers",
-    "updated": "2026-10-31",
+    "updated": "2026-11-04",
     "human_versions": {
       "portfolio": "https://hardyalsinghdeora.pages.dev/",
       "resume": "https://hardyalsinghdeora.github.io/case-studies/resume.html",
@@ -98,7 +98,7 @@ export const PROFILE = {
     ],
     "ideal_work": "First choice: building production LLM agents and AI platforms, where my backend discipline (idempotency, audit trails, rollback plans, cost budgets) is what the agent work is usually missing. Also: platforms mid-rebuild, estates that need migrating, domains where the data model is the hard part and the business rules are genuinely complicated."
   },
-  "summary": "Agentic AI Architect and Principal Software Engineer. I design and ship LLM systems end to end: a hybrid-RAG agent with Gemini function calling and a retrieval eval set (this portfolio), an unattended MCP-based pull-request review agent that runs every 30 minutes at work, a code-review tool that puts Anthropic Claude, Google Gemini and local Ollama models behind one structured-output interface, an MCP server for image generation, and guardrail and token-cost tooling for AI coding agents. Underneath that is 15 years in backend and distributed systems, specialising in commerce, billing and order-to-cash platforms for a B2B education business. Owns architecture across 12+ domain services behind a single API gateway and writes the technical specifications other engineers execute. Directed a live MySQL-to-PostgreSQL migration across six product lines with no maintenance window, and designed the finance-auditable billing, discounting and invoicing models the commercial platform runs on. Six years leading engineering teams: sprint delivery, code review as the quality bar, onboarding design and mentoring across several squads.",
+  "summary": "Agentic AI Architect and Principal Software Engineer. I design and ship LLM systems end to end: a hybrid-RAG agent with Gemini function calling and a retrieval eval set (this portfolio), an unattended MCP-based pull-request review agent that runs every 30 minutes at work, a code-review tool that puts Anthropic Claude, Google Gemini and local Ollama models behind one structured-output interface, an MCP server for image generation, and guardrail and token-cost tooling for AI coding agents. Underneath that is 15 years in backend and distributed systems, specialising in commerce, billing and order-to-cash platforms for a B2B education business. Owns architecture across 12+ domain services behind a single API gateway and writes the technical specifications other engineers execute. Directed a MySQL-to-PostgreSQL migration across six product lines designed to run with no maintenance window (partly live; the remaining product lines are built and in pilot), and designed the finance-auditable billing, discounting and invoicing models the commercial platform runs on. Six years leading engineering teams: sprint delivery, code review as the quality bar, onboarding design and mentoring across several squads.",
   "headline_metrics": [
     {
       "value": "3",
@@ -122,7 +122,7 @@ export const PROFILE = {
     },
     {
       "value": "6",
-      "label": "product lines bridged in a live DB migration, zero customer-visible incidents"
+      "label": "product lines in a live DB migration designed with no maintenance window (partly live, the rest in pilot)"
     },
     {
       "value": "~25,000",
@@ -296,9 +296,9 @@ export const PROFILE = {
       "scope": "Architecture and data-model owner across the commercial platform; squad lead for four engineers; named tech lead on invoicing, a field-operations product and legacy product support; guides ~10 engineers across several teams.",
       "highlights": [
         "Platform architecture: own architecture across 12+ domain services behind one API gateway — service boundaries, data models and the specifications the team builds from; JWT verification and per-route rate limiting solved once at the edge.",
-        "Live database migration: directed a live MySQL-to-PostgreSQL migration across six product lines with no maintenance window — re-runnable historical backfill separated from a continuous reverse-sync so unmigrated products kept serving; specified ID mapping, idempotency, retries, monitoring and rollback in ~25,000 words executed by other engineers. Zero customer-visible incidents.",
-        "Finance-auditable billing: designed a discount engine with a four-tier approval ladder (self-approval to C-suite), rack-rate vs selling-price handling, and date-derived contract terms.",
-        "Invoicing tech lead: designed oldest-invoice-first payment mapping with structured proof-of-payment capture to cut reconciliation lag against a DSO target.",
+        "Live database migration: directed a MySQL-to-PostgreSQL migration across six product lines (about 20 years of data) designed to run with no maintenance window — re-runnable historical backfill separated from a continuous reverse-sync so unmigrated products keep serving; ID mapping, idempotency, retries, monitoring and rollback specified in ~25,000 words other engineers executed. Partly live; the remaining product lines are built and in pilot.",
+        "Finance-auditable billing: designed a discount engine with a four-tier approval ladder (self-approval to C-suite), rack-rate vs selling-price handling, and date-derived contract terms. SKUs are grouped into discounted bundles, with extra discounts for high-revenue orders and designation-based limits; in daily use by the whole domestic sales team.",
+        "Invoicing tech lead: designed oldest-invoice-first payment mapping with structured proof-of-payment capture to cut reconciliation lag against a DSO target. Domestic invoices are now created in the accounting system directly from the platform, ending manual entry; international invoicing is held back until its commercial rules are settled.",
         "Peak reliability: re-architected a blocking annual batch path into asynchronous per-activity events, holding 99.9% uptime through the academic-year peak; built queue-driven order-to-access activation/deactivation.",
         "Technical leadership: set review, testing and coding standards in business-critical modules; coach on defect prevention and root-cause analysis; monthly programme status to leadership for 7+ consecutive months.",
         "Set the standards the platform is built to: API contracts, schema design, review practice, and how services communicate; work with leadership to translate commercial requirements into service boundaries and data models."
@@ -315,7 +315,7 @@ export const PROFILE = {
         "Led sprint planning, backlog grooming and stakeholder communication across ~30 recorded sprints; published annual build-and-release plans; tracked sprint overspill.",
         "Established code review as the team's primary quality and teaching surface; designed 30- and 90-day onboarding plans; ran 1:1s.",
         "Designed and led a strangler migration of a live PHP/MySQL application to Node.js microservices on PostgreSQL with an Angular UI: 70 pages across 12 modules in 3 months with 2 developers. Shared login (PHP session plus JWT), per-module MySQL write flags so both databases stayed current, no user-visible interruption; legacy PHP app retired.",
-        "Ran a PHP 5.3 → 7.3 migration moving the full user base off deprecated servers; reworked CI/CD on Bitbucket Pipelines, cutting deployment time.",
+        "Upgraded a live product from PHP 5.2 to PHP 8.2 and retired the old servers (2023); recognised with the company's \"Mountain Mover\" award. Reworked CI/CD on Bitbucket Pipelines, cutting deployment time.",
         "Shipped a versioned partner CRM integration with published API docs; delivered a tenth regional language with offline distribution, automated user transfer, annual class upgrade and credential revocation in the sync mechanism.",
         "Guided engineers through design review and technical specification writing; owned stakeholder communication across product and engineering.",
         "Integrated CRM and accounting systems using OAuth 2.0.",
@@ -329,7 +329,10 @@ export const PROFILE = {
       "from": "2016-06",
       "to": "2020-04",
       "highlights": [
-        "Built regional-language (Hindi) diagnostic assessment tooling, commercial pipeline / sales-funnel dashboards, and an internal finance tax module that removed manual steps from finance workflows."
+        "Built regional-language (Hindi) diagnostic assessment tooling, commercial pipeline / sales-funnel dashboards, and an internal finance tax module that removed manual steps from finance workflows.",
+        "Speech-based reading assessment (2016): children read a passage aloud; speech-to-text compared it with the original to score reading accuracy. Recognition of children's accents and local languages reached only about 70%, so teachers reviewed the highlighted gaps; the review effort was too high and the product was discontinued. The lesson I apply to LLM work now: measure the effort left for people, not just model accuracy, and route only uncertain items to human review.",
+        "Redeveloped a legacy PHP 5.3 module as a PHP 7.3 microservice on MongoDB (2019).",
+        "Internal business systems: HR, payroll and order management."
       ]
     },
     {
@@ -339,7 +342,7 @@ export const PROFILE = {
       "from": "2015-06",
       "to": "2016-06",
       "highlights": [
-        "Enhanced mission-critical applications for a national FMCG brand; ran field visits with real users and fed findings back into the product.",
+        "Worked on-site at a national dairy cooperative with its veterinary doctors on a web application that tracked cattle health, breeding and insemination records and vaccinations; vets and local milk collectors entered the data, and vets used the reports to follow milk-productivity improvement. Monthly review meetings with all the vets shaped the next month's features and reports.",
         "Proposed and implemented optimisations that improved reliability and reduced downtime."
       ]
     },
@@ -350,7 +353,8 @@ export const PROFILE = {
       "from": "2014-02",
       "to": "2015-05",
       "highlights": [
-        "Built and scaled Laravel-based client platforms and REST APIs consumed by mobile clients."
+        "Built \"Cabbing\", a taxi-booking product, on CodeIgniter with the Google Maps API.",
+        "Built custom WordPress themes and plugins for a client product (SuperHandles)."
       ]
     },
     {
@@ -360,7 +364,7 @@ export const PROFILE = {
       "from": "2013-01",
       "to": "2014-02",
       "highlights": [
-        "Built \"Cabbing\", a taxi-booking product, on CodeIgniter with the Google Maps API; custom WordPress themes and client-facing integrations."
+        "Built core-PHP applications for local clients: CRUD features and contact-form submissions."
       ]
     },
     {
@@ -404,12 +408,27 @@ export const PROFILE = {
       "domain": "Integration",
       "name": "CRM, finance, HR",
       "summary": "Third-party systems behind ports and adapters so a vendor can be swapped without touching a caller; bounded-concurrency scheduled syncs above the gateway."
+    },
+    {
+      "domain": "AI engineering",
+      "name": "AI-assisted PHP to Node.js modernisation (2026, in progress)",
+      "summary": "Moving a live adaptive-learning product from PHP to Node.js feature by feature, with login shared across both applications and MySQL and PostgreSQL running side by side until cut-over, so users see no change. AI coding agents write most of the new code to a set of team-written guidelines: design rules, project structure, logging and error-handling standards. Every change is reviewed by engineers before it ships. My part: the migration approach, the guidelines, documentation and code review. Lesson: with agents writing code, the bottleneck moves from typing to specifying and reviewing."
+    },
+    {
+      "domain": "Edge",
+      "name": "Offline-first edge sync for low-connectivity schools",
+      "summary": "A Raspberry Pi in each government school served the learning product to students' tablets over the local network, so classes worked without internet. Sync used ordered change packages: content (database changes and images separately), student attempts and user-detail changes were packaged nightly, shipped through S3 and applied strictly in sequence, with acknowledgements in both directions so nothing counted as synced until the other side confirmed it. Code updates shipped separately, about monthly. I built part of the sync logic and automated most of the manual local-server setup. After a sync bug, the fleet was upgraded mostly remotely with teachers over video calls; the devices that couldn't be were collected with the funding partner at a few central points. Lesson: build remote updates in from day one."
+    },
+    {
+      "domain": "CRM",
+      "name": "Lead-management data model",
+      "summary": "Pushed for a full redesign of the lead-management data model before launch. The first design assumed every lead came from the domestic sales process; I walked the team through concrete roadmap scenarios (funder-led government-school leads, partner-sourced international leads, a changed conversion process) and proposed a model where lead source, buyer type and conversion stages are data rather than fixed columns. Lesson: disagree with scenarios, not opinions."
     }
   ],
   "migration_case_study": {
     "title": "Moving a live commerce platform between two databases without a maintenance window",
     "url": "https://hardyalsinghdeora.pages.dev/case/db-migration",
-    "context": "B2B commerce platform selling annual seat-based contracts; six product lines, each with its own pricing shape; a dozen services; a ~15-year-old MySQL estate replaced by domain services on PostgreSQL, both live with customers throughout. Legacy products were not retired, so the result was two systems of record, both live, converging slowly.",
+    "context": "B2B commerce platform selling annual seat-based contracts; six product lines, each with its own pricing shape; a dozen services; a ~20-year-old MySQL estate replaced by domain services on PostgreSQL, both live with customers throughout. Legacy products were not retired, so the result was two systems of record, both live, converging slowly.",
     "options_rejected": [
       "Freeze, dump, restore: unbounded failure mode, no quick way back from a failed restore",
       "Big-bang cutover behind a flag: concentrates all risk in one moment; partial cutovers have no real recovery",
@@ -425,13 +444,13 @@ export const PROFILE = {
       "Idempotency in the data, not the runbook: an order is ported only when its external-origin identifier is null, so CRM-originated records are never duplicated"
     ],
     "numbers": {
-      "timeline": "Under six months from first specification to steady state",
+      "timeline": "Partly live: the first product lines run on the new platform; the remaining product lines are built, tested and in pilot",
       "records_backfilled": "consolidated from two upstream systems of record; the exact volume is company data, shared in conversation rather than in public",
       "product_lines": 6,
       "legacy_tables_to_generic": "~30 to 4",
       "specification": "~25,000 words across seven documents; designed and specified by me, executed by a platform team",
-      "customer_visible_incidents": 0,
-      "rollbacks_exercised": 0
+      "verification": "Automated old-vs-new comparisons, manual sampling, and comparison of output artifacts from both systems",
+      "why_custom_sync": "The sync predates mature change-data-capture tools and had run reliably for about ten years, so its proven logic was carried over rather than changing two things mid-migration"
     },
     "lesson": "In any dual-write system drift is not a risk, it is a certainty with an unknown arrival time. Reconciliation must exist before the first write; it is part of the mechanism, not a phase after it.",
     "would_do_differently": [
@@ -686,8 +705,8 @@ export const PROFILE = {
     "location_preference": "Ahmedabad-based; open to remote or hybrid, on-site in Pune, Bengaluru or Hyderabad, or relocation anywhere in India.",
     "role_preference": "First choice: Agentic AI Architect, AI Platform / AI Technical Architect, or a Principal / Staff Engineer role building LLM agents and AI platforms. Also Principal / Staff Engineer, Software Architect or Engineering Manager on backend/platform, commerce/billing or data-model-heavy systems.",
     "core_stack": "AI: Gemini function calling and embeddings, Anthropic Claude SDK, Ollama, MCP servers and clients, hybrid RAG (BM25 + embeddings + RRF), JSON-schema structured output. Platform: TypeScript/Node.js, PostgreSQL, microservices behind an API gateway, AWS, Cloudflare Workers; Angular on the front end.",
-    "migrations_led": "Three migrations, all with users working throughout: (1) as Principal, directed the live MySQL→PostgreSQL migration of a B2B commerce platform across six product lines with no maintenance window and zero customer-visible incidents; (2) as Lead, designed and led a strangler migration of a live PHP/MySQL application to Node.js microservices on PostgreSQL with an Angular UI (70 pages, 12 modules, 3 months, 2 developers), using a shared PHP-session + JWT login and per-module MySQL write flags, then retired the legacy app with no user-visible interruption; (3) as Lead, moved a legacy product's full user base from PHP 5.3 to PHP 7.3 and decommissioned the old servers.",
-    "biggest_achievement": "Directed a no-downtime MySQL→PostgreSQL migration across six product lines in under six months: ~30 legacy tables consolidated into 4, zero customer-visible incidents, from a 25k-word spec other engineers executed. In AI, the unattended MCP-based PR-review agent the team relies on every day.",
+    "migrations_led": "Three migrations, all with users working throughout: (1) as Principal, directed the MySQL→PostgreSQL migration of a B2B commerce platform across six product lines, designed to run with no maintenance window — partly live, with the remaining product lines built and in pilot; (2) as Lead, designed and led a strangler migration of a live PHP/MySQL application to Node.js microservices on PostgreSQL with an Angular UI (70 pages, 12 modules, 3 months, 2 developers), using a shared PHP-session + JWT login and per-module MySQL write flags, then retired the legacy app with no user-visible interruption; (3) as Lead, upgraded a live product from PHP 5.2 to PHP 8.2 and retired the old servers (2023), recognised with the company's \"Mountain Mover\" award. Now (2026) also moving an adaptive-learning product from PHP to Node.js with AI coding agents writing the code to team-written guidelines.",
+    "biggest_achievement": "Designing the MySQL→PostgreSQL migration of a B2B commerce platform across six product lines: ~30 legacy tables consolidated into 4, from a 25k-word specification other engineers executed. It is partly live, with the remaining product lines in pilot. In AI, the unattended MCP-based PR-review agent the team relies on every day.",
     "team_size_led": "Squad lead for 4; guide ~10 engineers across teams; ~6 years in lead roles.",
     "links": "LinkedIn: linkedin.com/in/hardyalsinghdeora · GitHub: github.com/hardyalsinghdeora · Email: hardyalsinghdeora@gmail.com"
   }

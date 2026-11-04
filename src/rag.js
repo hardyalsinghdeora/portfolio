@@ -230,7 +230,16 @@ function rank(scores) {
 
 const EMBED_DIM = 768;
 const EMBED_API = "https://generativelanguage.googleapis.com/v1beta/models/";
-let docVectorCache = null; // { key, vectors } kept for the life of the Worker isolate
+// key -> vectors, kept for the life of the Worker isolate. One entry per index: the public one, and
+// one per tier that adds private passages (src/tiers.js), so switching tiers never re-embeds.
+const docVectorCache = new Map();
+const DOC_VECTOR_ENTRIES = 4;
+const vectorKeys = new WeakMap(); // chunks array -> { key, kvKey }
+
+// One query vector, for the semantic answer cache (src/cache.js). Throws when embeddings fail.
+export async function embedQuery(env, text, fetchImpl = fetch) {
+  return (await embed(env, [text], "RETRIEVAL_QUERY", fetchImpl))[0];
+}
 
 function normalize(v) {
   let n = 0;
@@ -262,15 +271,23 @@ async function embed(env, texts, taskType, fetchImpl) {
 
 async function docVectors(env, chunks, fetchImpl) {
   const key = (env.GEMINI_EMBED_MODEL || "") + ":" + chunks.length + ":" + chunks.map((c) => c.text.length).join(",");
-  if (docVectorCache && docVectorCache.key === key) return docVectorCache.vectors;
+  // The key includes every chunk's text, so two indexes with equal lengths never share vectors.
+  // Memoised per chunk array: hashing the whole profile on every search would waste time.
+  const memo = vectorKeys.get(chunks);
+  const kvKey = memo && memo.key === key ? memo.kvKey : "emb:" + (await hash(key + chunks.map((c) => c.text).join("\u0000")));
+  vectorKeys.set(chunks, { key, kvKey });
+  if (docVectorCache.has(kvKey)) return docVectorCache.get(kvKey);
+  const remember = (vectors) => {
+    if (docVectorCache.size >= DOC_VECTOR_ENTRIES) docVectorCache.delete(docVectorCache.keys().next().value);
+    docVectorCache.set(kvKey, vectors);
+    return vectors;
+  };
   // A KV binding (optional) lets a cold isolate skip re-embedding the profile.
-  const kvKey = "emb:" + (await hash(key + chunks.map((c) => c.text).join("\u0000")));
   if (env.RATE_KV) {
     const hit = await env.RATE_KV.get(kvKey, "json").catch(() => null);
-    if (hit && hit.length === chunks.length) return (docVectorCache = { key, vectors: hit }).vectors;
+    if (hit && hit.length === chunks.length) return remember(hit);
   }
-  const vectors = await embed(env, chunks.map((c) => c.text), "RETRIEVAL_DOCUMENT", fetchImpl);
-  docVectorCache = { key, vectors };
+  const vectors = remember(await embed(env, chunks.map((c) => c.text), "RETRIEVAL_DOCUMENT", fetchImpl));
   if (env.RATE_KV) await env.RATE_KV.put(kvKey, JSON.stringify(vectors), { expirationTtl: 60 * 60 * 24 * 30 }).catch(() => {});
   return vectors;
 }

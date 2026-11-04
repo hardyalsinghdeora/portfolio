@@ -1,0 +1,10 @@
+{
+  "_comment": "Shape of knowledge/private/recruiter.json and owner.json. Those files are gitignored; scripts/private-kb.mjs validates them and uploads them to KV. Never put private details in knowledge/profile.json, which is public.",
+  "passages": [
+    {
+      "id": "example-story",
+      "title": "Recruiter story: a short title that reads well as a source",
+      "text": "Self-contained facts, with the names and numbers that are fine for this tier. No phone numbers anywhere; compensation only in owner.json."
+    }
+  ]
+}

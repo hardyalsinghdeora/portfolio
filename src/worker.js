@@ -3,6 +3,13 @@
 //   POST /api/fit     job-description fit: { jd } -> requirement-by-requirement match with sources
 //   GET  /api/search  retrieval only, no LLM call: ?q=... returns the top passages
 //   POST /api/feedback  thumbs up/down on an answer (needs RATE_KV); GET exports it (FEEDBACK_ADMIN_TOKEN)
+//   /auth/*, /api/me, /api/access-request, /api/admin/*  LinkedIn sign-in and access tiers (src/auth.js)
+//
+// Each question: tier from the session (auth.js) -> input guard (inject.js) -> semantic cache
+// (cache.js) -> model router (router.js) -> agent over the tier's index (tiers.js) -> output guard.
+// Sign-in: LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, SESSION_SECRET, OWNER_EMAILS (+ RATE_KV).
+// Cache: SEMANTIC_CACHE=off, SEMANTIC_CACHE_THRESHOLD. Router: GEMINI_MODEL_LIGHT / _HEAVY,
+// ANTHROPIC_MODEL_LIGHT, MODEL_ROUTER=off.
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
 //           ANTHROPIC_API_KEY (optional): Claude answers when Gemini fails; ANTHROPIC_MODEL picks the
@@ -17,9 +24,14 @@
 
 import { PROFILE } from "./knowledge.js";
 import { buildChunks, buildIndex, search } from "./rag.js";
-import { SYSTEM } from "./agent.js";
+import { systemFor } from "./agent.js";
 import { runAgentWithFallback } from "./providers.js";
 import { guardText, GUARDED_ANSWER, GUARDED_EVIDENCE } from "./guard.js";
+import { screenTurns, INJECTION_REPLY } from "./inject.js";
+import { routeQuestion, modelsFor } from "./router.js";
+import { cacheLookup, cacheStore, cacheEnabled } from "./cache.js";
+import { indexForTier, contentVersion } from "./tiers.js";
+import { getViewer, handleAuth } from "./auth.js";
 import { feedbackToken, feedbackEntry, feedbackKey, sameToken, FEEDBACK_TTL } from "./feedback.js";
 import { assessFit, JD_MIN, JD_MAX } from "./fit.js";
 
@@ -39,7 +51,7 @@ export function getIndex() {
 }
 
 export default {
-  fetch: (request, env) => handle(request, env, fetch),
+  fetch: (request, env, ctx) => handle(request, env, fetch, ctx),
 };
 
 // Short, stable links the agent can quote without mangling a long GitHub URL.
@@ -50,14 +62,18 @@ export const SHORT_LINKS = {
 };
 
 // fetchImpl is injectable so tests can stand in for the Gemini API.
-export async function handle(request, env, fetchImpl) {
+// ctx (the Worker's ExecutionContext) lets cache writes finish after the response is sent; without
+// it (tests, the eval harness) they are awaited instead.
+export async function handle(request, env, fetchImpl, ctx) {
   const url = new URL(request.url);
   const target = SHORT_LINKS[url.pathname.replace(/\/+$/, "")];
   if (target) return Response.redirect(target, 302);
   try {
+    const auth = await handleAuth(request, env, url, fetchImpl, (r) => (env.RATE_KV ? underLimit(env.RATE_KV, r) : true));
+    if (auth) return auth;
     if (url.pathname === "/api/ask") {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
-      return await ask(request, env, fetchImpl);
+      return await ask(request, env, fetchImpl, ctx);
     }
     if (url.pathname === "/api/fit") {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
@@ -80,7 +96,7 @@ export async function handle(request, env, fetchImpl) {
   return env.ASSETS.fetch(request);
 }
 
-async function ask(request, env, fetchImpl) {
+async function ask(request, env, fetchImpl, ctx) {
   if (!sameOrigin(request)) return json(403, { error: "forbidden" });
   if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY) return json(503, { error: "not_configured" });
 
@@ -90,9 +106,42 @@ async function ask(request, env, fetchImpl) {
   if (!turns) return json(400, { error: "bad_messages" });
   if (env.RATE_KV && !(await underLimit(env.RATE_KV, request))) return json(429, { error: "rate_limited" });
 
+  // Who is asking decides what the agent can retrieve and what the guard lets through.
+  const { tier } = await getViewer(request, env);
+  const question = turns[turns.length - 1].content;
+  const reply = async (text, meta) => {
+    // Signs exactly what the visitor saw, so feedback can only rate answers the site gave.
+    if (env.RATE_KV) meta.fb = await feedbackToken(env, question, text);
+    return new Response(text + SEP + JSON.stringify({ ...meta, tier }), {
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
+  };
+
+  // Input guard: an injection attempt gets a fixed reply and costs no model call.
+  const screened = screenTurns(turns, tier);
+  if (screened.action !== "allow") console.warn(JSON.stringify({ event: "injection", action: screened.action, reasons: screened.reasons }));
+  if (screened.action === "block") return reply(INJECTION_REPLY, { sources: [], steps: [], retrieval: "none", blocked: true });
+
+  const index = await indexForTier(env, tier, getIndex());
+  const system = systemFor(tier);
+  // The cache namespace changes whenever the knowledge or the prompt does.
+  const version = contentVersion([index.version, system]);
+  // A member sees exactly what the public sees (same index, prompt and guard), so they share its cache.
+  const cacheTier = tier === "member" ? "public" : tier;
+  const cacheable = screened.turns.length === 1 && screened.action === "allow" && cacheEnabled(env, cacheTier);
+  const lookup = cacheable ? await cacheLookup({ env, tier: cacheTier, version, question, fetchImpl }) : { hit: null, vector: null };
+  if (lookup.hit) {
+    await countSource(env, request, "ask", body.ref);
+    console.log(JSON.stringify({ event: "ask", cached: lookup.hit.kind, similarity: lookup.hit.similarity }));
+    return reply(lookup.hit.text, { ...lookup.hit.meta, cached: lookup.hit.kind, similarity: lookup.hit.similarity,
+      usage: { model: "cache", calls: 0, input_tokens: 0, output_tokens: 0, ms: 0, cost_usd: 0 } });
+  }
+
+  // Route on what the visitor typed: a flagged question's untrusted-text wrapper would count as words.
+  const route = routeQuestion(turns);
   let result;
   try {
-    result = await runAgentWithFallback({ turns, index: getIndex(), profile: PROFILE, env, fetchImpl });
+    result = await runAgentWithFallback({ turns: screened.turns, index, profile: PROFILE, env, fetchImpl, system, models: modelsFor(env, route.level) });
   } catch (err) {
     console.error("agent failed", err && err.status, err && err.detail);
     // Free-tier quota exhaustion comes back as 429; the page shows its "busy" note.
@@ -100,18 +149,23 @@ async function ask(request, env, fetchImpl) {
   }
   await countSource(env, request, "ask", body.ref);
   // Last check before the visitor sees it. The model's text is dropped, never logged.
-  const guard = guardText(result.text, [SYSTEM]);
-  if (guard) console.warn(JSON.stringify({ event: "guard", kind: "ask", reason: guard }));
+  const guard = guardText(result.text, [system], tier);
+  if (guard) console.warn(JSON.stringify({ event: "guard", kind: "ask", reason: guard, tier }));
   recordUsage(env, "ask", result.usage, result.retrieval, body.ref, guard);
   const text = guard ? GUARDED_ANSWER : result.text;
   const meta = guard
     ? { sources: [], steps: result.steps, retrieval: result.retrieval, usage: result.usage, guarded: true }
     : { sources: result.sources, steps: result.steps, retrieval: result.retrieval, usage: result.usage };
-  // Signs exactly what the visitor saw, so feedback can only rate answers the site gave.
-  if (env.RATE_KV) meta.fb = await feedbackToken(env, turns[turns.length - 1].content, text);
-  return new Response(text + SEP + JSON.stringify(meta), {
-    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
-  });
+  meta.route = route;
+  if (screened.action === "flag") meta.flagged = true;
+  // Only grounded, unguarded answers are worth replaying.
+  if (cacheable && !guard && result.sources.length) {
+    const store = cacheStore({ env, tier: cacheTier, version, question, vector: lookup.vector, text, fetchImpl,
+      meta: { sources: meta.sources, steps: meta.steps, retrieval: meta.retrieval, route } });
+    // The visitor shouldn't wait on an embedding call and a KV write.
+    if (ctx && ctx.waitUntil) ctx.waitUntil(store); else await store;
+  }
+  return reply(text, meta);
 }
 
 async function fit(request, env, fetchImpl) {
@@ -125,9 +179,13 @@ async function fit(request, env, fetchImpl) {
   if (jd.length > JD_MAX) return json(400, { error: "jd_too_long", max: JD_MAX });
   if (env.RATE_KV && !(await underLimit(env.RATE_KV, request))) return json(429, { error: "rate_limited" });
 
+  const { tier } = await getViewer(request, env);
+  const index = await indexForTier(env, tier, getIndex());
+  // Job fit is two structured judgements over many requirements: the heavy route's models.
+  const models = modelsFor(env, routeQuestion([], { kind: "fit" }).level);
   let result;
   try {
-    result = await assessFit({ jd, index: getIndex(), env, fetchImpl });
+    result = await assessFit({ jd, index, env, fetchImpl, tier, models });
   } catch (err) {
     console.error("fit failed", err && err.status, err && err.detail);
     return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });
@@ -137,10 +195,10 @@ async function fit(request, env, fetchImpl) {
   // paraphrased back to them, so it isn't checked.
   let guard = null;
   for (const r of result.requirements) {
-    const g = guardText(r.evidence);
+    const g = guardText(r.evidence, [], tier);
     if (g) { guard = guard || g; r.evidence = GUARDED_EVIDENCE; }
   }
-  const g = guardText(result.summary);
+  const g = guardText(result.summary, [], tier);
   if (g) { guard = guard || g; result.summary = GUARDED_ANSWER; }
   if (guard) { result.guarded = true; console.warn(JSON.stringify({ event: "guard", kind: "fit", reason: guard })); }
   await countSource(env, request, "fit", body.ref);

@@ -413,6 +413,18 @@ body.chatting .dock{display:block}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms !important; transition-duration:.01ms !important}
 }
+/* sign-in and access tiers */
+#acct-btn{width:auto; padding:0 12px; font:600 .78rem/1 inherit; gap:6px; grid-auto-flow:column}
+#acct-btn .tier{font-weight:700; color:var(--accent)}
+#acct-dlg{border:1px solid var(--line); border-radius:16px; background:var(--panel); color:var(--ink); padding:20px; width:min(420px,calc(100vw - 32px)); box-shadow:var(--shadow)}
+#acct-dlg::backdrop{background:rgba(0,0,0,.4)}
+#acct-dlg h2{font-size:1.05rem; margin:0 0 8px}
+#acct-dlg p{color:var(--ink-2); font-size:.88rem; margin:0 0 10px}
+#acct-dlg label{display:block; font-size:.8rem; color:var(--ink-2); margin:8px 0 4px}
+#acct-dlg input,#acct-dlg textarea{width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--soft); color:var(--ink); font:inherit}
+#acct-dlg .row{display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap}
+#acct-dlg .btn{border:1px solid var(--line); background:var(--soft); color:var(--ink); border-radius:999px; padding:8px 14px; font:600 .85rem inherit; cursor:pointer; text-decoration:none}
+#acct-dlg .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
 </style>
 
 <div class="shell">
@@ -429,8 +441,10 @@ body.chatting .dock{display:block}
       <button class="tbtn" id="theme-btn" aria-label="Toggle theme" title="Toggle theme">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
+      <button class="tbtn" id="acct-btn" hidden aria-haspopup="dialog">Sign in</button>
     </div>
   </header>
+  <dialog id="acct-dlg" aria-labelledby="acct-title"><div id="acct-body"></div></dialog>
 
   <section class="home" id="home">
     <div class="avatar">HS</div>
@@ -621,9 +635,9 @@ body.chatting .dock{display:block}
         ['Jul 2024 &#8212; now','Principal Software Engineer','Educational Initiatives &#183; Ahmedabad','Own backend and platform architecture across a suite of domain services: service boundaries, data models, and the technical specifications the team builds from. Lead the replacement of long-lived production systems with no maintenance window. Set the standards the platform is built to, from API contracts and schema design to review practice, and work with leadership to turn commercial requirements into service boundaries.',H[0]],
         ['Apr 2020 &#8212; Jul 2024','Lead Software Engineer','Educational Initiatives &#183; Ahmedabad','Technical lead for a platform team; owned sprint planning, backlog grooming and stakeholder communication across product and engineering. Reworked CI/CD on Bitbucket Pipelines, cutting deployment time. Made code review the team&#8217;s main quality and teaching surface, and guided engineers through design review and specification writing.',H[1]],
         ['Jun 2016 &#8212; Apr 2020','Senior Software Engineer','Educational Initiatives &#183; Ahmedabad','Built diagnostic tooling for regional-language proficiency assessment, reporting dashboards that gave the commercial team visibility it previously lacked, and an internal tax module that removed manual steps from finance workflows.',H[2]],
-        ['Jun 2015 &#8212; Jun 2016','Senior PHP Developer','Analytics Solution &#183; Ahmedabad','Enhanced mission-critical applications for a national FMCG brand. Ran field visits with real users and fed the findings straight back into the product. Proposed and shipped optimisations that improved reliability and reduced downtime.',H[3]],
-        ['Feb 2014 &#8212; May 2015','PHP Developer','Ilogix Infotech &#183; Ahmedabad','Built and scaled Laravel-based client platforms, and REST APIs consumed by mobile clients.',H[4]],
-        ['Jan 2013 &#8212; Feb 2014','PHP Developer','Seven Sleek &#183; Ahmedabad','Built Cabbing, a taxi booking product, on CodeIgniter with the Google Maps API, plus custom WordPress themes and client-facing integrations.',H[5]],
+        ['Jun 2015 &#8212; Jun 2016','Senior PHP Developer','Analytics Solution &#183; Ahmedabad','Worked on-site at a national dairy cooperative with its veterinary doctors on a web application tracking cattle health, breeding records and vaccinations. Monthly review meetings with the vets shaped each next round of features and reports. Proposed and shipped optimisations that improved reliability and reduced downtime.',H[3]],
+        ['Feb 2014 &#8212; May 2015','PHP Developer','Ilogix Infotech &#183; Ahmedabad','Built Cabbing, a taxi booking product, on CodeIgniter with the Google Maps API, and custom WordPress themes and plugins for a client product.',H[4]],
+        ['Jan 2013 &#8212; Feb 2014','PHP Developer','Seven Sleek &#183; Ahmedabad','Built core-PHP applications for local clients: CRUD features and contact-form submissions.',H[5]],
         ['Oct 2011 &#8212; Dec 2012','Front End Developer','Softyoug Solution &#183; Vapi','Built SEO-optimised sites in HTML5, CSS3 and JavaScript, and held the line on cross-browser compatibility and W3C compliance.',H[0]]
       ].map(function (j) {
         return '<div class="job" style="--c:'+j[4]+'"><div class="yr">'+j[0]+'</div><h4>'+j[1]+'</h4><div class="co">'+j[2]+'</div><p>'+j[3]+'</p></div>';
@@ -856,6 +870,7 @@ body.chatting .dock{display:block}
   // "1.6 s · 2,140 tokens · $0.0004": what an answer cost to produce. Cost shows only when the
   // server has prices configured; it never guesses.
   function usageText(u) {
+    if (u && u.model === 'cache') return 'served from the answer cache, no model call';
     if (!u || !u.ms) return '';
     var parts = [(u.ms / 1000).toFixed(1) + ' s', (u.input_tokens + u.output_tokens).toLocaleString('en-US') + ' tokens',
       u.calls + ' model call' + (u.calls === 1 ? '' : 's')];
@@ -1230,6 +1245,60 @@ body.chatting .dock{display:block}
       (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
     root.setAttribute('data-theme', dark ? 'light' : 'dark');
   });
+
+  // ---------- sign-in and access tiers (src/auth.js, src/tiers.js) ----------
+  // The server decides the tier from the signed session; the page only shows it. Recruiters
+  // Hardyal approves see more detail in answers; nothing private is ever sent to this page.
+  var acctBtn = document.getElementById('acct-btn'), dlg = document.getElementById('acct-dlg'),
+      dlgBody = document.getElementById('acct-body'), me = null;
+  var TIER_NAME = { member: 'Signed in', recruiter: 'Recruiter', owner: 'Owner' };
+  function acctView() {
+    if (!me) return '';
+    var u = me.user, close = '<button class="btn" data-x="close">Close</button>';
+    if (!u) return '<h2 id="acct-title">Recruiter access</h2><p>Sign in with LinkedIn to ask for recruiter access. Once I approve it, answers here include project names, numbers, detailed stories and references. Signing in shares your LinkedIn name, email and photo with this site, nothing else.</p>' +
+      '<div class="row">' + close + '<a class="btn primary" href="/auth/linkedin">Sign in with LinkedIn</a></div>';
+    var head = '<h2 id="acct-title">' + esc(String(u.name || 'Signed in')) + '</h2>', out = '<button class="btn" data-x="logout">Sign out</button>';
+    if (me.tier === 'owner') return head + '<p>Owner: answers use every passage, including private notes.</p><div class="row">' + out + '<a class="btn primary" href="/admin.html">Review requests</a></div>';
+    if (me.tier === 'recruiter') return head + '<p>Recruiter access is on: answers include project names, numbers, detailed stories and references.</p><div class="row">' + out + close + '</div>';
+    if (u.status === 'pending') return head + '<p>Your request is waiting for my review. You&#8217;ll see the extra detail here as soon as I approve it.</p><div class="row">' + out + close + '</div>';
+    return head + '<p>Tell me where you&#8217;re hiring and I&#8217;ll review the request myself.</p>' +
+      '<form id="acct-form"><label for="acct-co">Company</label><input id="acct-co" maxlength="80" required>' +
+      '<label for="acct-role">Your role</label><input id="acct-role" maxlength="80" required placeholder="e.g. Talent partner">' +
+      '<label for="acct-note">Role you&#8217;re hiring for (optional)</label><textarea id="acct-note" maxlength="300" rows="2"></textarea>' +
+      '<p id="acct-msg" role="status"></p><div class="row">' + out + '<button class="btn primary" type="submit">Request access</button></div></form>';
+  }
+  function acctRender() {
+    acctBtn.innerHTML = me && me.tier !== 'public' ? '<span class="tier">' + TIER_NAME[me.tier] + '</span>' : 'Sign in';
+    dlgBody.innerHTML = acctView();
+  }
+  function loadMe() {
+    return fetch('/api/me', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { me = d; if (me && me.loginEnabled) { acctBtn.hidden = false; acctRender(); } }).catch(function () {});
+  }
+  acctBtn.addEventListener('click', function () { acctRender(); if (dlg.showModal) dlg.showModal(); });
+  dlg.addEventListener('click', function (e) {
+    var x = e.target.getAttribute && e.target.getAttribute('data-x');
+    if (e.target === dlg || x === 'close') dlg.close();
+    if (x === 'logout') fetch('/auth/logout', { method: 'POST' }).then(function () { location.reload(); });
+  });
+  dlg.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('acct-msg');
+    fetch('/api/access-request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      company: document.getElementById('acct-co').value, role: document.getElementById('acct-role').value, note: document.getElementById('acct-note').value }) })
+      .then(function (r) { if (!r.ok) throw r; return loadMe(); })
+      .catch(function () { msg.textContent = 'That didn’t go through. Please try again, or email me.'; });
+  });
+  // After LinkedIn redirects back: show the result once, then drop ?login= from the address bar.
+  try {
+    var lp = new URLSearchParams(location.search), login = lp.get('login');
+    if (login) {
+      lp.delete('login');
+      history.replaceState(null, '', location.pathname + (lp.toString() ? '?' + lp : '') + location.hash);
+      loadMe().then(function () { if (login === 'ok' && me && me.user) { acctRender(); dlg.showModal && dlg.showModal(); } });
+      if (login === 'failed') alert('LinkedIn sign-in didn’t complete. Please try again.');
+    } else loadMe();
+  } catch (e) { loadMe(); }
 })();
 </script>
 </body>

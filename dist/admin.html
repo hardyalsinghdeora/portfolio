@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Recruiter requests</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#fff;--panel:#fff;--soft:#F6F7F8;--ink:#0E1113;--ink-2:#4E555B;--line:#E7EAEC;--accent:#5B62E8;--ok:#0a7d3b;--bad:#b42318}
+@media (prefers-color-scheme:dark){:root{--bg:#0D0F11;--panel:#15181B;--soft:#181C1F;--ink:#F1F3F4;--ink-2:#A8B0B6;--line:#242A2E;--accent:#8189F5;--ok:#4ade80;--bad:#f87171}}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:960px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.3rem;margin:0 0 4px}
+p.sub{color:var(--ink-2);margin:0 0 20px}
+a{color:var(--accent)}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px 16px;margin:0 0 10px;display:grid;gap:4px}
+.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.name{font-weight:700}
+.meta{color:var(--ink-2);font-size:.85rem;overflow-wrap:anywhere}
+.badge{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
+.badge.pending{color:var(--accent)} .badge.approved{color:var(--ok)} .badge.rejected,.badge.revoked{color:var(--bad)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+button{border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:999px;padding:6px 12px;font:600 .82rem inherit;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+#status{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Recruiter requests</h1>
+  <p class="sub">Approve people who should see project names, numbers, detailed stories and references. Revoking takes effect on their next question. <a href="/">Back to the site</a></p>
+  <p id="status" role="status">Loading…</p>
+  <p><button id="clear-cache">Clear cached answers</button> <span class="meta">Use it when a cached answer is wrong or odd; the next visitor to ask gets a fresh one.</span></p>
+  <div id="list"></div>
+</main>
+<script>
+(function () {
+  var statusEl = document.getElementById('status'), list = document.getElementById('list');
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function when(s) { return s ? new Date(s).toLocaleString() : ''; }
+  var ACTIONS = { pending: ['approve', 'reject'], none: ['approve'], approved: ['revoke'], rejected: ['approve'], revoked: ['approve'] };
+  function render(users) {
+    statusEl.textContent = users.length ? users.length + ' signed-in ' + (users.length === 1 ? 'person' : 'people') : 'Nobody has signed in yet.';
+    list.innerHTML = users.map(function (u) {
+      var st = u.status || 'none';
+      return '<div class="card"><div class="top"><span class="name">' + esc(u.name || '(no name)') + '</span><span class="badge ' + esc(st) + '">' + esc(st) + '</span></div>' +
+        '<div class="meta">' + esc(u.email) + (u.email_verified ? ' (verified)' : ' (unverified email)') + '</div>' +
+        (u.company ? '<div class="meta">' + esc(u.role) + ' at <b>' + esc(u.company) + '</b>' + (u.note ? ' · ' + esc(u.note) : '') + '</div>' : '') +
+        '<div class="meta">Requested ' + esc(when(u.requested) || 'never') + ' · last seen ' + esc(when(u.last_seen)) + '</div>' +
+        '<div class="actions">' + (ACTIONS[st] || []).map(function (a) {
+          return '<button class="' + (a === 'approve' ? 'primary' : '') + '" data-sub="' + esc(u.sub) + '" data-d="' + a + '">' + a.charAt(0).toUpperCase() + a.slice(1) + '</button>';
+        }).join('') + '</div></div>';
+    }).join('');
+  }
+  function load() {
+    fetch('/api/admin/users', { credentials: 'same-origin' }).then(function (r) {
+      if (r.status === 401) throw 'Sign in on the home page first (owner only).';
+      if (r.status === 403) throw 'This page is for the site owner only.';
+      if (r.status === 404) throw 'Sign-in isn’t configured on this deployment.';
+      if (!r.ok) throw 'Couldn’t load the list (' + r.status + ').';
+      return r.json();
+    }).then(function (d) { render(d.users || []); }).catch(function (msg) { statusEl.textContent = typeof msg === 'string' ? msg : 'Couldn’t load the list.'; list.innerHTML = ''; });
+  }
+  list.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-d]');
+    if (!b) return;
+    b.disabled = true;
+    fetch('/api/admin/decide', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: b.getAttribute('data-sub'), decision: b.getAttribute('data-d') }) })
+      .then(function (r) { if (!r.ok) throw r; load(); })
+      .catch(function () { b.disabled = false; statusEl.textContent = 'That didn’t save. Try again.'; });
+  });
+  document.getElementById('clear-cache').addEventListener('click', function (e) {
+    var b = e.target;
+    b.disabled = true;
+    fetch('/api/admin/cache-clear', { method: 'POST' }).then(function (r) { if (!r.ok) throw r; return r.json(); })
+      .then(function (d) { statusEl.textContent = 'Cleared ' + d.removed + ' cached answer ' + (d.removed === 1 ? 'set' : 'sets') + '.'; })
+      .catch(function () { statusEl.textContent = 'Couldn’t clear the cache. Try again.'; })
+      .then(function () { b.disabled = false; });
+  });
+  load();
+})();
+</script>
+</body>
+</html>

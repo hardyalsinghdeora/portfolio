@@ -66,3 +66,18 @@ Visitor feedback closes the loop from the other side. A 👎 on a live answer, w
 
 Next:
 - log anonymised retrieval misses, the questions where the top score is low, to grow the eval set.
+
+## Addendum (2026-11-04): access tiers, input guard, semantic cache, model router
+
+**Context.** Recruiters ask for detail that can't be public: internal product and partner names, company numbers, full interview stories and references. Traffic also repeats the same questions, and adding Claude as a provider makes each answer cost real money.
+
+**Decisions.**
+1. **Tiers enforced at retrieval, not in the prompt.** Private passages live only in KV (uploaded by `scripts/private-kb.mjs` from gitignored files) and join the index only for approved recruiters and the owner (`src/tiers.js`). A prompt can be talked around; an index that never contained the passage can't leak it. The output guard relaxes per tier as a second layer.
+2. **Sign in with LinkedIn, approval by the owner.** LinkedIn's OpenID Connect profile has no job title, so signing in alone grants nothing. Sessions are HMAC-signed cookies; the approval status is read from KV on each request, so revocation is immediate rather than at cookie expiry.
+3. **Input guard before the model.** Rule-based screening (`src/inject.js`): strong signals block, two weak signals block, one flags. Client-supplied assistant turns are re-checked against the tier's output guard, which removes forged "earlier answers".
+4. **Semantic cache with a term-overlap check.** Cosine alone confuses "Kafka" and "Kubernetes"; a Jaccard check on key terms fixes that. One namespace per tier and content version; first questions only; grounded answers only.
+5. **Rule-based model router.** An LLM classifier would cost about as much as the cheap answer it saves. Light questions go to Haiku or Flash-Lite, design questions to the stronger model.
+
+**Alternatives considered.** Cloudflare Access in front of a separate recruiter site (two sites to maintain, no shared agent); a model-based injection classifier (an extra call on every question, and itself injectable); exact-match caching only (misses most paraphrases).
+
+**Consequences.** Private passages are sent to the model provider like any retrieved text, so they follow that provider's data terms. KV is eventually consistent, so an approval or revocation can take up to about a minute to reach every location. The cache adds one KV write per new question, within the free plan's daily limit at this traffic.

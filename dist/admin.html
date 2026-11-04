@@ -31,6 +31,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <h1>Recruiter requests</h1>
   <p class="sub">Approve people who should see project names, numbers, detailed stories and references. Revoking takes effect on their next question. <a href="/">Back to the site</a></p>
   <p id="status" role="status">Loading…</p>
+  <p><button id="clear-cache">Clear cached answers</button> <span class="meta">Use it when a cached answer is wrong or odd; the next visitor to ask gets a fresh one.</span></p>
   <div id="list"></div>
 </main>
 <script>
@@ -68,6 +69,14 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     fetch('/api/admin/decide', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: b.getAttribute('data-sub'), decision: b.getAttribute('data-d') }) })
       .then(function (r) { if (!r.ok) throw r; load(); })
       .catch(function () { b.disabled = false; statusEl.textContent = 'That didn’t save. Try again.'; });
+  });
+  document.getElementById('clear-cache').addEventListener('click', function (e) {
+    var b = e.target;
+    b.disabled = true;
+    fetch('/api/admin/cache-clear', { method: 'POST' }).then(function (r) { if (!r.ok) throw r; return r.json(); })
+      .then(function (d) { statusEl.textContent = 'Cleared ' + d.removed + ' cached answer ' + (d.removed === 1 ? 'set' : 'sets') + '.'; })
+      .catch(function () { statusEl.textContent = 'Couldn’t clear the cache. Try again.'; })
+      .then(function () { b.disabled = false; });
   });
   load();
 })();

@@ -235,10 +235,11 @@ The output guard checks what the model wrote. `src/inject.js` checks what visito
 
 Recruiters ask the same dozen questions, so `src/cache.js` answers repeats from KV with no model call:
 - **Exact hits** match the normalised question and need no embedding.
-- **Semantic hits** need a cosine of at least 0.92 (`SEMANTIC_CACHE_THRESHOLD`) **and** at least 50% overlap in key terms. Without the term check, "Do you know Kafka?" would get the cached answer about Kubernetes: the two embed close together.
+- **Semantic hits** need a cosine of at least 0.92 (`SEMANTIC_CACHE_THRESHOLD`) **and** at least two-thirds overlap in key terms. Without the term check, "Do you know Kafka?" would get the cached answer about Kubernetes: the two embed close together. Questions with no key terms ("Who are you?") only match exactly.
 - **Only safe answers are cached:** first questions only (a follow-up depends on its conversation), grounded answers only (cited sources, passed the guard).
-- **Namespaces:** one per tier and content version (profile, private passages and system prompt), so an edit starts an empty cache. The owner isn't cached.
-- Up to 200 entries for 7 days per namespace. `SEMANTIC_CACHE=off` disables it.
+- **Namespaces:** one per tier and content version (profile, private passages and system prompt), so an edit starts an empty cache. Signed-in members see what the public sees, so they share its namespace. The owner isn't cached.
+- Up to 200 entries for 7 days per namespace, vectors stored as int8 (~1KB each). Writes run after the response (`waitUntil`). `SEMANTIC_CACHE=off` disables it.
+- **Clearing:** "Clear cached answers" in `/admin.html` (owner only, `POST /api/admin/cache-clear`) empties every namespace when a cached answer is wrong.
 - A cached answer is still signed for feedback, and the trace says it came from the cache.
 
 ## Model router

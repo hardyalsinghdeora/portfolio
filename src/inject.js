@@ -10,10 +10,13 @@
 
 import { guardText } from "./guard.js";
 
-// Any one of these blocks the question.
+// Any one of these blocks the question. They are tight on purpose: visitors to a Gen AI portfolio
+// ask about system prompts, guardrails and bypassing rate-limit rules as engineering questions, so
+// the words must be addressed to this assistant ("ignore your instructions", "print the system
+// prompt"), not just appear near each other.
 const STRONG = [
-  ["override", /\b(ignore|disregard|forget|override|bypass|skip)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|any|your|the|these|system)\b[^.\n]{0,30}\b(instructions?|rules?|prompts?|guidelines?|directives?|restrictions?|guardrails?)\b/i],
-  ["prompt_extraction", /\b(reveal|show|print|repeat|output|dump|leak|display|give me|tell me|what (?:is|are|was|were))\b[^.\n]{0,30}\b(?:your |the |my )?(system|hidden|initial|original|developer|secret)\s*(prompt|instructions?|message|rules|configuration)\b/i],
+  ["override", /\b(?:ignore|disregard|forget|override)\s+(?:(?:all|your|my|these|those|of)\s+){0,3}(?:(?:previous|prior|above|earlier|system|original|initial)\s+)?(?:instructions?|rules|prompts?|guidelines|directives|guardrails|restrictions)\b|\b(?:ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(?:previous|prior|above|earlier|system)\s+(?:instructions?|rules|prompts?|guidelines|directives)\b/i],
+  ["prompt_extraction", /\b(?:reveal|show|print|repeat|output|dump|leak|display|give me|tell me)\s+(?:(?:me|us)\s+)?(?:(?:your|the|my)\s+)?(?:(?:full|exact|entire|whole)\s+)?(?:system|hidden|initial|original|developer|secret)\s*(?:prompt|instructions?|message|rules|configuration)\b|\bwhat\s+(?:is|are|was|were)\s+your\s+(?:system|hidden|initial|original|developer|secret)\s*(?:prompt|instructions?|message|rules|configuration)\b/i],
   ["role_tokens", /<\|?\s*(im_start|im_end|system|endoftext)\s*\|?>|\[\/?INST\]|<\/?(system|instructions?)>/i],
   ["jailbreak", /\b(jailbreak|DAN mode|developer mode|god mode|do anything now)\b/i],
 ];

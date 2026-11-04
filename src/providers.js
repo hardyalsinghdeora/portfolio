@@ -156,7 +156,8 @@ export async function runAgentWithFallback(opts) {
   const claude = (model) => runAgent({ ...opts, fetchImpl, provider: claudeAgent(model ? { ...env, ANTHROPIC_MODEL: model } : env, fetchImpl, system) });
   const { value, fallback } = await withFallback(env, [
     { name: "gemini", ok: Boolean(env.GEMINI_API_KEY), run: () => gemini(models && models.gemini) },
-    { name: "gemini", ok: Boolean(env.GEMINI_API_KEY && models && models.geminiFallback), run: () => gemini(models.geminiFallback) },
+    // Its own name, so the logs show which Gemini attempt failed.
+    { name: "gemini-light", ok: Boolean(env.GEMINI_API_KEY && models && models.geminiFallback), run: () => gemini(models.geminiFallback) },
     { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: () => claude(models && models.claude) },
   ]);
   if (fallback) value.usage.fallback = fallback;

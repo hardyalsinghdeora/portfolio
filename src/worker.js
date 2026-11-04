@@ -51,7 +51,7 @@ export function getIndex() {
 }
 
 export default {
-  fetch: (request, env) => handle(request, env, fetch),
+  fetch: (request, env, ctx) => handle(request, env, fetch, ctx),
 };
 
 // Short, stable links the agent can quote without mangling a long GitHub URL.
@@ -62,7 +62,9 @@ export const SHORT_LINKS = {
 };
 
 // fetchImpl is injectable so tests can stand in for the Gemini API.
-export async function handle(request, env, fetchImpl) {
+// ctx (the Worker's ExecutionContext) lets cache writes finish after the response is sent; without
+// it (tests, the eval harness) they are awaited instead.
+export async function handle(request, env, fetchImpl, ctx) {
   const url = new URL(request.url);
   const target = SHORT_LINKS[url.pathname.replace(/\/+$/, "")];
   if (target) return Response.redirect(target, 302);
@@ -71,7 +73,7 @@ export async function handle(request, env, fetchImpl) {
     if (auth) return auth;
     if (url.pathname === "/api/ask") {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
-      return await ask(request, env, fetchImpl);
+      return await ask(request, env, fetchImpl, ctx);
     }
     if (url.pathname === "/api/fit") {
       if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
@@ -94,7 +96,7 @@ export async function handle(request, env, fetchImpl) {
   return env.ASSETS.fetch(request);
 }
 
-async function ask(request, env, fetchImpl) {
+async function ask(request, env, fetchImpl, ctx) {
   if (!sameOrigin(request)) return json(403, { error: "forbidden" });
   if (!env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY) return json(503, { error: "not_configured" });
 
@@ -124,8 +126,10 @@ async function ask(request, env, fetchImpl) {
   const system = systemFor(tier);
   // The cache namespace changes whenever the knowledge or the prompt does.
   const version = contentVersion([index.version, system]);
-  const cacheable = screened.turns.length === 1 && screened.action === "allow" && cacheEnabled(env, tier);
-  const lookup = cacheable ? await cacheLookup({ env, tier, version, question, fetchImpl }) : { hit: null, vector: null };
+  // A member sees exactly what the public sees (same index, prompt and guard), so they share its cache.
+  const cacheTier = tier === "member" ? "public" : tier;
+  const cacheable = screened.turns.length === 1 && screened.action === "allow" && cacheEnabled(env, cacheTier);
+  const lookup = cacheable ? await cacheLookup({ env, tier: cacheTier, version, question, fetchImpl }) : { hit: null, vector: null };
   if (lookup.hit) {
     await countSource(env, request, "ask", body.ref);
     console.log(JSON.stringify({ event: "ask", cached: lookup.hit.kind, similarity: lookup.hit.similarity }));
@@ -133,7 +137,8 @@ async function ask(request, env, fetchImpl) {
       usage: { model: "cache", calls: 0, input_tokens: 0, output_tokens: 0, ms: 0, cost_usd: 0 } });
   }
 
-  const route = routeQuestion(screened.turns);
+  // Route on what the visitor typed: a flagged question's untrusted-text wrapper would count as words.
+  const route = routeQuestion(turns);
   let result;
   try {
     result = await runAgentWithFallback({ turns: screened.turns, index, profile: PROFILE, env, fetchImpl, system, models: modelsFor(env, route.level) });
@@ -155,8 +160,10 @@ async function ask(request, env, fetchImpl) {
   if (screened.action === "flag") meta.flagged = true;
   // Only grounded, unguarded answers are worth replaying.
   if (cacheable && !guard && result.sources.length) {
-    await cacheStore({ env, tier, version, question, vector: lookup.vector, text, fetchImpl,
+    const store = cacheStore({ env, tier: cacheTier, version, question, vector: lookup.vector, text, fetchImpl,
       meta: { sources: meta.sources, steps: meta.steps, retrieval: meta.retrieval, route } });
+    // The visitor shouldn't wait on an embedding call and a KV write.
+    if (ctx && ctx.waitUntil) ctx.waitUntil(store); else await store;
   }
   return reply(text, meta);
 }
@@ -176,10 +183,9 @@ async function fit(request, env, fetchImpl) {
   const index = await indexForTier(env, tier, getIndex());
   // Job fit is two structured judgements over many requirements: the heavy route's models.
   const models = modelsFor(env, routeQuestion([], { kind: "fit" }).level);
-  const fitEnv = { ...env, GEMINI_MODEL: models.gemini, ANTHROPIC_MODEL: models.claude };
   let result;
   try {
-    result = await assessFit({ jd, index, env: fitEnv, fetchImpl });
+    result = await assessFit({ jd, index, env, fetchImpl, tier, models });
   } catch (err) {
     console.error("fit failed", err && err.status, err && err.detail);
     return json(err && err.status === 429 ? 429 : 502, { error: "upstream" });

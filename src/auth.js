@@ -7,6 +7,7 @@
 //   POST /api/access-request  a signed-in member asks for recruiter access { company, role, note? }
 //   GET  /api/admin/users     owner only: every signed-in user and their status
 //   POST /api/admin/decide    owner only: { sub, decision: "approve" | "reject" | "revoke" }
+//   POST /api/admin/cache-clear  owner only: empty the semantic answer cache (src/cache.js)
 //
 // LinkedIn's OpenID Connect profile has name, email and photo, but no job title, so nobody becomes
 // a recruiter by signing in: the owner approves each request. The tier is re-read from KV on every
@@ -18,6 +19,7 @@
 
 import { sameToken } from "./feedback.js";
 import { cleanInput } from "./inject.js";
+import { clearCache } from "./cache.js";
 
 export const LINKEDIN_AUTHORIZE = "https://www.linkedin.com/oauth/v2/authorization";
 export const LINKEDIN_TOKEN = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -147,6 +149,7 @@ export async function handleAuth(request, env, url, fetchImpl, limit = async () 
   if (path === "/api/access-request") return accessRequest(request, env, limit);
   if (path === "/api/admin/users") return adminUsers(request, env);
   if (path === "/api/admin/decide") return adminDecide(request, env);
+  if (path === "/api/admin/cache-clear") return adminCacheClear(request, env);
   return null;
 }
 
@@ -261,4 +264,16 @@ async function adminDecide(request, env) {
   await env.RATE_KV.put(USER_PREFIX + sub, JSON.stringify({ ...rec, status, decided: new Date().toISOString() }));
   console.log(JSON.stringify({ event: "access_decision", status }));
   return authJson(200, { ok: true, status });
+}
+
+// Other isolates keep their in-memory copy for up to 30 seconds (src/cache.js MEMORY_REFRESH_MS),
+// so an answer stored in that window can bring old entries back; clearing again removes them.
+async function adminCacheClear(request, env) {
+  if (request.method !== "POST") return authJson(405, { error: "method_not_allowed" });
+  if (!authSameOrigin(request)) return authJson(403, { error: "forbidden" });
+  const denied = await requireOwner(request, env);
+  if (denied) return denied;
+  const removed = await clearCache(env);
+  console.log(JSON.stringify({ event: "cache_clear", removed }));
+  return authJson(200, { ok: true, removed });
 }

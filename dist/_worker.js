@@ -191,7 +191,8 @@ const PROFILE = {
       "Python",
       "PHP",
       "C++ (DSA/problem solving)",
-      "SQL"
+      "SQL",
+      "Polyglot: production code in TypeScript, PHP and Python"
     ],
     "data": [
       "PostgreSQL",
@@ -206,7 +207,7 @@ const PROFILE = {
       "Soft-delete & audit column conventions"
     ],
     "cloud_delivery": [
-      "AWS (S3, CloudFront, SQS, RDS)",
+      "AWS (EC2, Lambda, S3, CloudFront, SQS, RDS)",
       "Cloudflare Workers, Pages and KV",
       "Azure",
       "Docker",
@@ -257,6 +258,16 @@ const PROFILE = {
       "Sprint planning & backlog grooming",
       "Monthly leadership reporting"
     ],
+    "engineering_practice": [
+      "Unit testing",
+      "Integration testing",
+      "Effort estimation (story points / t-shirt sizing) in sprint and release planning",
+      "Change management: release gating, rollout and rollback plans for production changes",
+      "Technology strategy: build-vs-buy and stack decisions with leadership",
+      "Technical due diligence of codebases, vendors and tools before adoption",
+      "Technical consulting for internal business units and clients",
+      "Discovery workshops with stakeholders and clients"
+    ],
     "monitoring": [
       "Grafana and Sentry server monitoring dashboards",
       "Production issue log in a database, emailed at end of day with server and application logs"
@@ -270,7 +281,7 @@ const PROFILE = {
       "Kafka / event streaming: topics, partitions, consumer groups; production event-driven work has used AWS SQS queues"
     ],
     "ai_stack": [
-      "LangChain / LangGraph: built small apps with them; production agents so far are hand-rolled tool-calling loops (MCP, Gemini function calling)",
+      "LangChain / LangGraph: built small apps with them, most fully the open-source Ops Copilot (supervisor, specialist and reviewer agents, interrupt-based human approval); production agents so far are hand-rolled tool-calling loops (MCP, Gemini function calling)",
       "Vector databases (pgvector, Pinecone, Chroma): working level; the portfolio agent uses in-memory vectors because ~50 chunks don't need a database",
       "AWS Bedrock / Google Vertex AI: called models through both; production LLM calls so far go to provider APIs directly (Gemini, Claude, OpenAI realtime)",
       "LLM evaluation (LLM-as-judge, RAGAS-style metrics): working level; the portfolio ships a retrieval eval set measuring hit@1 and hit@5"
@@ -634,10 +645,19 @@ const PROFILE = {
       "summary": "A set of reusable agent skills built for the squad: PR inbox (open PRs by author/reviewer), PR review, build-release email generation from Jira fix-versions, sprint/monthly squad briefings from Jira + Confluence, personal sprint retrospectives, Jira ticket creation from conversation, and an actionable-email rewriter for system alerts."
     },
     {
-      "name": "ops-copilot",
-      "status": "Public",
+      "name": "Ops Copilot (multi-agent RAG + MCP learning project)",
+      "status": "Shipped, open source; learning project on synthetic data",
       "url": "https://github.com/hardyalsinghdeora/ops-copilot",
-      "summary": "A multi-agent assistant for on-call engineers built on Claude, LangGraph and MCP: hybrid retrieval over runbooks with citations, a reviewer agent that checks answers against evidence, human approval before anything writes to the world, and retrieval evals in CI."
+      "summary": "An on-call assistant I built to learn LangGraph and MCP end to end, on a synthetic knowledge base for a fictional platform. A LangGraph supervisor routes each request to one of three specialist agents (knowledge Q&A, incident triage, release notes), each a bounded ReAct loop on Claude scoped to only the MCP tools it needs. Two FastMCP servers expose hybrid retrieval (ChromaDB vectors + BM25, reciprocal rank fusion, chunk-level citations) and ops data (alerts, deployments, tickets, service catalogue). An LLM-as-judge reviewer checks every draft against the raw evidence with a capped revision loop, and filing a ticket pauses the graph with interrupt() until a human approves. Ships an eval harness (hit@k, MRR, BM25 vs vector vs hybrid comparison, judge faithfulness), offline tests with scripted models, CI, and an 8-chapter self-study course in docs/.",
+      "topics": [
+        "langgraph",
+        "mcp",
+        "rag",
+        "multi-agent",
+        "human-in-the-loop",
+        "llm-evaluation",
+        "claude"
+      ]
     },
     {
       "name": "Interview prep kit (fde-interview-prep)",

@@ -47,5 +47,6 @@
   { "q": "Why didn't you use a vector database?", "expect": ["agentic-rag", "genai-rag_experience", "familiarity-ai"] },
   { "q": "How do you keep agents safe in production?", "expect": ["genai-agent_safety_and_guardrails", "agentic-guardrails", "agentic-practices-safety"] },
   { "q": "Why do you want a Gen AI role?", "expect": ["genai-why_genai_roles", "targeting", "qa-role_preference"] },
-  { "q": "What Gen AI work have you shipped?", "expect": ["genai-genai_experience", "agentic-"] }
+  { "q": "What Gen AI work have you shipped?", "expect": ["genai-genai_experience", "agentic-"] },
+  { "q": "Have you built anything with LangGraph?", "expect": ["project-7", "familiarity-ai"] }
 ]

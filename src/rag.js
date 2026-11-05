@@ -114,8 +114,8 @@ export function buildChunks(p) {
   }
   const wf = p.working_familiarity;
   if (wf) {
-    add("familiarity-infra", "Working familiarity (not production): infrastructure", "working_familiarity",
-      `${wf.meaning}\n${list(wf.infrastructure)}`);
+    add("familiarity-infra", "Working familiarity (not production): languages and infrastructure", "working_familiarity",
+      `${wf.meaning}\n${list([...(wf.languages || []), ...(wf.infrastructure || [])])}`);
     add("familiarity-ai", "Working familiarity (not production): AI stack", "working_familiarity",
       `${wf.meaning}\n${list(wf.ai_stack)}`);
   }

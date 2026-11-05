@@ -2,7 +2,7 @@
 # LinkedIn and Naukri text
 
 Paste these into the job sites so they say what the portfolio says. Regenerated on every build,
-from profile data updated 2026-11-04.
+from profile data updated 2026-11-05.
 
 ## LinkedIn
 

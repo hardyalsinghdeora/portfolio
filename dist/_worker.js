@@ -5,7 +5,7 @@
 const PROFILE = {
   "meta": {
     "purpose": "Machine-readable career profile for recruiters and hiring managers",
-    "updated": "2026-11-04",
+    "updated": "2026-11-05",
     "human_versions": {
       "portfolio": "https://hardyalsinghdeora.pages.dev/",
       "resume": "https://hardyalsinghdeora.github.io/case-studies/resume.html",
@@ -437,6 +437,11 @@ const PROFILE = {
       "domain": "CRM",
       "name": "Lead-management data model",
       "summary": "Pushed for a full redesign of the lead-management data model before launch. The first design assumed every lead came from the domestic sales process; I walked the team through concrete roadmap scenarios (funder-led government-school leads, partner-sourced international leads, a changed conversion process) and proposed a model where lead source, buyer type and conversion stages are data rather than fixed columns. Lesson: disagree with scenarios, not opinions."
+    },
+    {
+      "domain": "AI engineering",
+      "name": "Agentic delivery framework behind a permission-aware MCP gateway",
+      "summary": "An agentic software development lifecycle (SDLC), built with my team and used for our own delivery. One MCP server, acting as a gateway with role-based permissions, connects the agents to the documentation wiki, the issue tracker, the code repository (main branch) and the staging database schema. Access is two-layered: an internal IAM service issues each user a signed system token carrying their permissions as a bitmask, and the gateway offers only the agents and tools those bits allow; calls to the wiki, tracker and repository use the user's own tokens, so an agent never sees more than its user can. The flow: requirements go into a document; a PRD agent drafts the PRD for review; a tech-doc agent reads the approved PRD, the coding guidelines and the codebase to say where the feature lives and how it must be built; a DB-doc agent reads the schema and says whether the feature fits or needs new columns or tables. After the tech doc is approved, an agent creates the tasks under the right epic in a standard structure (outcome, acceptance criteria, in scope, out of scope, definition of done, the unit tests that must pass) and a status dashboard per feature. A coding agent implements each task and loops with a review agent until the change meets the guidelines; a unit-test agent writes the tests, which the review agent must also pass; only then is a pull request raised, and engineers review and approve it manually. QA has an agent that drafts test cases for every scenario, which QA reviews; the product manager, tech lead and QA do sanity checks on staging before production. The platform underneath is a set of microservices deployed as a few service groups to save server cost, behind an API gateway that routes to each product's aggregator service or orchestrates common services itself. What I would add next: injection defences for content agents read, per-call confirmation for write actions, an audit log, bounded agent loops with deterministic checks first, tests generated from acceptance criteria, and an eval set for the agents."
     }
   ],
   "migration_case_study": {
@@ -531,7 +536,8 @@ const PROFILE = {
     "agents_in_production": [
       "Unattended pull-request review agent (TypeScript, Node.js, MCP): runs every 30 minutes, reads the linked Jira ticket first, calls tools through Model Context Protocol and publishes a triaged report per repository with an approve / needs-fix verdict.",
       "Portfolio agent (this site): a Gemini function-calling agent that plans which tools to call, retrieves evidence from a chunked career knowledge base with hybrid RAG (BM25 + Gemini embeddings, fused with reciprocal rank fusion) and answers with cited sources.",
-      "Engineering-ops agent skills for the squad: PR inbox, PR review, build-release emails from Jira fix-versions, sprint and monthly briefings from Jira and Confluence, sprint retrospectives, and Jira tickets drafted from conversation."
+      "Engineering-ops agent skills for the squad: PR inbox, PR review, build-release emails from Jira fix-versions, sprint and monthly briefings from Jira and Confluence, sprint retrospectives, and Jira tickets drafted from conversation.",
+      "Agentic delivery framework (with my team): a set of agents behind one permission-aware MCP gateway that turns requirements into a PRD, a technical design and a database design, plans the work as Jira epics and tasks, writes code in a bounded loop with a review agent that enforces the team's coding guidelines, writes unit tests, and drafts QA test cases. People approve at every decision point: PRD, tech doc, DB doc, pull request, QA and staging."
     ],
     "guardrails_and_cost": [
       "claude-toolkit: ten dependency-free CLI tools that add guardrails and cut token cost for Claude Code agent sessions: secrets used but never seen, production databases read-only by default, reversible MCP server toggling, and output compression before it enters the context.",
@@ -663,6 +669,11 @@ const PROFILE = {
       "name": "Interview prep kit (ai-interview-prep)",
       "status": "Private repository; happy to walk through it on a call",
       "summary": "An interview prep kit for Forward Deployed Engineer, Solutions and Applied AI roles, plus the core engineering track (backend SDE, Tech Lead, Engineering Manager): 20 roles compared, each with its interview loop, model answers and a 6-week study plan; 17 shared topic sections with more than 1,150 answered questions; 55 question lists by skill (about 2,200 questions); and 35 cheatsheets defining more than 3,000 technical and business terms."
+    },
+    {
+      "name": "agentic-sdlc-reference (private)",
+      "status": "Private repository; happy to walk through it on a call",
+      "summary": "A generic reconstruction of the agentic delivery framework: architecture and a review of 19 gaps, one skill-style definition per agent (inputs, permission bits, allowed tools, human gates, guardrails), PRD, tech-doc, DB-doc, Jira epic, Jira task and QA test-case templates, and a tested reference implementation of the gateway rules: bitwise permissions, a signed expiring system token, per-call permission checks with write confirmation and audit logging, a bounded coding-review loop, and Jira structure validation. No employer code or data."
     }
   ],
   "linkedin": {

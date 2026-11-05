@@ -48,5 +48,8 @@
   { "q": "How do you keep agents safe in production?", "expect": ["genai-agent_safety_and_guardrails", "agentic-guardrails", "agentic-practices-safety"] },
   { "q": "Why do you want a Gen AI role?", "expect": ["genai-why_genai_roles", "targeting", "qa-role_preference"] },
   { "q": "What Gen AI work have you shipped?", "expect": ["genai-genai_experience", "agentic-"] },
-  { "q": "Have you built anything with LangGraph?", "expect": ["project-7", "familiarity-ai"] }
+  { "q": "Have you built anything with LangGraph?", "expect": ["project-7", "familiarity-ai"] },
+  { "q": "Have you built an MCP server with permissions?", "expect": ["system-9", "agentic-agents"] },
+  { "q": "How do you use AI agents across the software development lifecycle?", "expect": ["system-9", "agentic-agents"] },
+  { "q": "Do your agents create Jira tickets, PRDs and technical design docs?", "expect": ["system-9", "agentic-agents"] }
 ]

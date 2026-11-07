@@ -285,6 +285,9 @@ export const PROFILE = {
     ],
     "studied_for_interviews": [
       "Go, Vue.js, Firestore, Google Pub/Sub, sharding, Redis Streams and distributed tracing: studied for interviews, not run in production"
+    ],
+    "languages": [
+      "Java 21 and Spring Boot 3: built the public spring-boot-order-service reference project (Spring Web, Data JPA, Validation, Flyway, MockMvc tests); production backend work so far has been TypeScript/Node.js, PHP and Python"
     ]
   },
   "architectural_defaults": [
@@ -671,6 +674,68 @@ export const PROFILE = {
       "name": "agentic-sdlc-reference (private)",
       "status": "Private repository; happy to walk through it on a call",
       "summary": "A generic reconstruction of the agentic delivery framework: architecture and a review of 19 gaps, one skill-style definition per agent (inputs, permission bits, allowed tools, human gates, guardrails), PRD, tech-doc, DB-doc, Jira epic, Jira task and QA test-case templates, and a tested reference implementation of the gateway rules: bitwise permissions, a signed expiring system token, per-call permission checks with write confirmation and audit logging, a bounded coding-review loop, and Jira structure validation. No employer code or data."
+    },
+    {
+      "name": "spring-boot-order-service (Java / Spring Boot reference build)",
+      "status": "Open source reference implementation, built as a portfolio sample",
+      "url": "https://github.com/hardyalsinghdeora/spring-boot-order-service",
+      "summary": "An order-to-cash REST service in Java 21 and Spring Boot 3.5, and my first public Java project: a familiar order-to-cash domain, written in a framework I use at a working level. POST /orders requires an Idempotency-Key (same key and payload replays the original order, a different payload is a 422); the JPA @Version is exposed as an ETag and edits need If-Match (stale version 412, lost race 409); an explicit DRAFT, CONFIRMED, FULFILLED, CANCELLED state machine; totals derived server-side with BigDecimal HALF_EVEN; RFC 9457 problem details; Flyway migrations; request-id tracing. 63 tests across domain unit tests, a @WebMvcTest slice and @SpringBootTest on the real schema, plus ADRs and CI.",
+      "topics": [
+        "spring-boot",
+        "java",
+        "rest-api",
+        "idempotency",
+        "optimistic-locking",
+        "flyway",
+        "rfc9457",
+        "order-management"
+      ]
+    },
+    {
+      "name": "api-gateway-rate-limiter",
+      "status": "Open source reference implementation, built as a portfolio sample",
+      "url": "https://github.com/hardyalsinghdeora/api-gateway-rate-limiter",
+      "summary": "A small API gateway in TypeScript on Hono and Node 22, covering what a gateway in front of many services has to get right. Per-route rate limiting with token-bucket and sliding-window algorithms behind one store interface, IETF RateLimit and Retry-After headers, fail-open on store errors by default; a per-upstream circuit breaker; bounded retries with full jitter for idempotent methods only; request-id tracing; hand-written Prometheus metrics; graceful shutdown. 96 unit and integration tests; the README shows the Redis Lua equivalent of the in-memory store.",
+      "topics": [
+        "api-gateway",
+        "rate-limiting",
+        "circuit-breaker",
+        "reverse-proxy",
+        "typescript",
+        "hono",
+        "nodejs",
+        "prometheus"
+      ]
+    },
+    {
+      "name": "event-outbox-worker",
+      "status": "Open source reference implementation, built as a portfolio sample",
+      "url": "https://github.com/hardyalsinghdeora/event-outbox-worker",
+      "summary": "The transactional outbox pattern in TypeScript and Node.js: an order and its OrderPlaced event commit in one transaction, a crash-safe relay publishes at least once with exponential backoff and a dead-letter table, and an idempotent consumer records processed event ids in the same transaction as its effect, so duplicate deliveries have exactly one effect. Per-aggregate ordering without one stuck aggregate blocking the rest. Runs on node:sqlite with ports for PostgreSQL and SQS or RabbitMQ; 33 tests and a demo that prints real counters, including suppressed duplicates.",
+      "topics": [
+        "transactional-outbox",
+        "event-driven-architecture",
+        "idempotency",
+        "dead-letter-queue",
+        "typescript",
+        "nodejs",
+        "sqlite"
+      ]
+    },
+    {
+      "name": "db-migration-reconciler",
+      "status": "Open source reference implementation, built as a portfolio sample",
+      "url": "https://github.com/hardyalsinghdeora/db-migration-reconciler",
+      "summary": "A typed Python CLI for the verification step of moving a live database without a maintenance window. Compares schema and row counts, checksums tables in keyset chunks with order-independent digests and drills into mismatched chunks down to the changed column, then repairs drift with a copy that is dry-run by default, resumable from a checkpoint, idempotent on re-run and never deletes. SQLAlchemy 2 with dialect-specific upserts for PostgreSQL, MySQL and SQLite; mypy strict, ruff and 39 tests.",
+      "topics": [
+        "database-migration",
+        "data-reconciliation",
+        "sqlalchemy",
+        "postgresql",
+        "mysql",
+        "zero-downtime",
+        "python-cli"
+      ]
     }
   ],
   "linkedin": {

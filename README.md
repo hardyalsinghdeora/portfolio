@@ -327,6 +327,10 @@ Edit `knowledge/profile.json` and run `npm test`. That regenerates `src/knowledg
 
 - [claude-toolkit](https://github.com/hardyalsinghdeora/claude-toolkit): guardrails and token-cost control for Claude Code agent sessions
 - [case-studies](https://github.com/hardyalsinghdeora/case-studies): decision record of a live MySQL → PostgreSQL migration
+- [spring-boot-order-service](https://github.com/hardyalsinghdeora/spring-boot-order-service): order-to-cash REST API in Java / Spring Boot with idempotency keys, `If-Match` and RFC 9457 errors
+- [api-gateway-rate-limiter](https://github.com/hardyalsinghdeora/api-gateway-rate-limiter): rate limiting, circuit breaking and safe retries in a small TypeScript gateway
+- [event-outbox-worker](https://github.com/hardyalsinghdeora/event-outbox-worker): transactional outbox, at-least-once relay and idempotent consumer
+- [db-migration-reconciler](https://github.com/hardyalsinghdeora/db-migration-reconciler): checksum, diff and backfill tooling for a migration with no maintenance window
 - [docs/case-study-php-to-node-strangler.md](docs/case-study-php-to-node-strangler.md): replacing a live PHP app with Node.js + Angular through a strangler migration with a shared login
 - [LinkedIn](https://www.linkedin.com/in/hardyalsinghdeora) · [Substack](https://substack.com/@hardyalsingh)
 

@@ -6,7 +6,7 @@
 
 import { search } from "./rag.js";
 import { GENERATE_API, DEFAULT_MODEL, usageOf, newUsage, addUsage, finishUsage } from "./agent.js";
-import { claudeJSON, withFallback } from "./providers.js";
+import { claudeJSON, withFallback, withClaudeBudget } from "./providers.js";
 
 export const JD_MIN = 80;
 export const JD_MAX = 8000;
@@ -122,7 +122,7 @@ async function generateJSON(env, system, text, schema, maxOutputTokens, fetchImp
   const { value, fallback } = await withFallback(env, [
     { name: "gemini", ok: Boolean(env.GEMINI_API_KEY), run: () => gemini(models && models.gemini) },
     { name: "gemini-light", ok: Boolean(env.GEMINI_API_KEY && models && models.geminiFallback), run: () => gemini(models.geminiFallback) },
-    { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: () => claudeJSON({ env: claudeEnv, system, text, schema, fetchImpl, usage }) },
+    { name: "claude", ok: Boolean(env.ANTHROPIC_API_KEY), run: withClaudeBudget(env, () => claudeJSON({ env: claudeEnv, system, text, schema, fetchImpl, usage })) },
   ]);
   if (fallback) usage.fallback = fallback;
   return value;

@@ -9,9 +9,10 @@ export const MAX_COMMENT = 300;
 const MAX_ANSWER = 4000;
 const MAX_QUESTION = 1000;
 
-// FEEDBACK_SECRET when set; otherwise derived from an API key, which never leaves the server.
+// Only a dedicated FEEDBACK_SECRET signs answers. Reusing an LLM API key as the HMAC key would tie
+// two unrelated secrets together; without FEEDBACK_SECRET, signed feedback is simply off.
 function secretOf(env) {
-  return env.FEEDBACK_SECRET || env.GEMINI_API_KEY || env.ANTHROPIC_API_KEY || "";
+  return env.FEEDBACK_SECRET || "";
 }
 
 async function hmacHex(secret, text) {

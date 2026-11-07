@@ -9,14 +9,14 @@ Visitor question
       │
       ▼
 POST /api/ask ── Cloudflare Worker (src/worker.js)
-      │  validate turns · same-origin check · per-IP rate limit (KV)
+      │  validate turns · same-origin check · per-IP rate limit, IPv6 per /64 (KV)
       │  tier from the signed LinkedIn session (src/auth.js): public · member · recruiter · owner
       │  input guard (src/inject.js): block injection, drop forged history ── blocked: fixed reply, no model call
       │  semantic cache (src/cache.js), per tier ── hit: cached answer, no model call
       │  model router (src/router.js): light or heavy model per question
       ▼
 Agent loop (src/agent.js) ── Gemini function calling, max 4 model calls
-      │  Claude fallback (src/providers.js) when Gemini fails and ANTHROPIC_API_KEY is set
+      │  Claude fallback (src/providers.js) when Gemini fails and ANTHROPIC_API_KEY is set, within a daily budget
       │  step 1: must call a tool   (toolConfig ANY)
       │  steps 2–3: model decides   (AUTO)
       │  step 4: must answer        (NONE)
@@ -167,7 +167,7 @@ npm test          # build, then run every test headlessly
   - visitor feedback: signed answers, forged answers rejected, what is stored (and that no IP is), the limits, and the token-protected export with draft eval cases;
   - the output guard: what it blocks, that no profile passage trips it, and that both endpoints replace guarded text;
   - the eval harness itself: its deterministic checks, and a full run against a fake model that must catch a leaked salary, an unfaithful answer and a job-fit overclaim;
-  - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit, which lets requests through if KV fails or hits its daily write cap, and visit-source counting;
+  - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit (IPv6 keyed per /64), which lets requests through if KV fails or hits its daily write cap, the Claude daily budget, which fails closed, and visit-source counting;
   - the content rules: working-familiarity skills never leak into production skills, every `get_section` value resolves, and **no employer-internal names or verbal-only company numbers appear in the knowledge base or either public page**.
 - **Retrieval eval (BM25 only, the worst case):** hit@5 = 49/49, hit@1 = 35/49. The set includes 13 Gen AI interview questions, for example "how do you prevent hallucinations?", "why no vector database?" and "how do you get structured JSON from an LLM?".
 
@@ -262,6 +262,10 @@ Gemini is the primary model (free tier). Set `ANTHROPIC_API_KEY` in the Pages pr
 - **Answers:** the whole agent run restarts on the fallback provider, so one transcript never mixes two APIs.
 - **Job fit:** each of its two structured-output calls falls back on its own, since they're stateless.
 - **Visible:** the trace says which model answered and why (*answered by claude-opus-5-5 after gemini failed (429)*), and the scorecard counts fallback answers.
+- **Bounded cost.** Gemini's free tier 429s under load, and each 429 would otherwise become a paid Claude run, so three limits apply:
+  - *Output cap:* `max_tokens` 1500 per agent step and 2000 per job-fit call, with effort `low` (thinking can't be turned off on Claude Opus 5.5 and counts toward `max_tokens`). A step cut off at the cap answers with its text and runs no half-written tool call.
+  - *Daily budget:* at most `CLAUDE_DAILY_LIMIT` Claude runs per UTC day across all visitors (default 200; an answer counts once, job fit counts per call), counted in `RATE_KV`. Past it, Claude is skipped and the visitor gets the normal "busy" reply, as when Gemini's quota runs out and no Claude key is set. If KV errors (down, or out of free-plan writes) Claude is skipped too, since the per-IP limit fails open then. Without `RATE_KV` there is no budget.
+  - *Per-client limit:* the hourly limit counts IPv4 addresses one by one, and IPv6 addresses per /64, the block one visitor can rotate through.
 
 Claude-specific handling:
 - **Raw `fetch`.** The build concatenates `src/` into one Worker with no bundler, so the npm SDK isn't used.
@@ -284,7 +288,7 @@ Every live answer gets 👍 / 👎. A 👎 also offers an optional "what was wro
 
 No IP address is stored. The page says the question and answer are sent.
 
-**Only real answers can be rated.** Each answer arrives with a signature (`meta.fb`, an HMAC over the question and the exact text the visitor saw), keyed by `FEEDBACK_SECRET` or, failing that, a server-side API key. Feedback without a matching signature is rejected, so the store can't fill with made-up answers. That matters because 👎 entries become eval cases. Ratings count against the same per-IP hourly limit as questions.
+**Only real answers can be rated.** Each answer arrives with a signature (`meta.fb`, an HMAC over the question and the exact text the visitor saw), keyed by `FEEDBACK_SECRET` (the LLM API keys are never reused for it). Without `FEEDBACK_SECRET` or `RATE_KV`, answers carry no signature, the page shows no buttons and `POST /api/feedback` returns 503. Feedback without a matching signature is rejected, so the store can't fill with made-up answers. That matters because 👎 entries become eval cases. Ratings count against the same per-IP (IPv6: per /64) hourly limit as questions.
 
 **Closing the loop:** set a `FEEDBACK_ADMIN_TOKEN` secret, then run `FEEDBACK_ADMIN_TOKEN=... node scripts/feedback.mjs`. It pulls the export (`GET /api/feedback`, bearer token; off without the secret) and prints a summary. It also writes `evals/results/feedback-candidates.json`: one draft answer-eval case per 👎, with the visitor's note, the answer given and the passages seen. Each draft needs its checks written by a person, because the note says what was wrong, not what's right. Then it moves into `evals/answers.json`.
 
@@ -310,11 +314,11 @@ The live site is a Cloudflare Pages project in advanced mode, using `_worker.js`
 2. Either drag the `dist/` folder into **Pages → Create deployment** (Environment: Production), or run `npx wrangler pages deploy dist`.
 3. Under **Settings → Variables and Secrets**, add the secret `GEMINI_API_KEY`.
    - Optional: `GEMINI_MODEL`, `GEMINI_EMBED_MODEL` and `RAG_EMBEDDINGS=off`.
-   - Optional KV binding `RATE_KV`, for rate limiting and the embedding cache.
-   - Optional `ANTHROPIC_API_KEY` (secret), for the Claude fallback; `ANTHROPIC_MODEL` and `LLM_PRIMARY` tune it.
+   - Optional KV binding `RATE_KV`, for rate limiting, the Claude daily budget and the embedding cache.
+   - Optional `ANTHROPIC_API_KEY` (secret), for the Claude fallback; `ANTHROPIC_MODEL`, `LLM_PRIMARY` and `CLAUDE_DAILY_LIMIT` (Claude runs per day, default 200) tune it.
    - Optional `GEMINI_PRICE_INPUT` and `GEMINI_PRICE_OUTPUT` (USD per 1M tokens), to show cost per answer.
    - Optional Analytics Engine binding `USAGE_AE`, for cost and latency history.
-   - Optional `FEEDBACK_ADMIN_TOKEN` (secret) to export visitor feedback, and `FEEDBACK_SECRET` to sign answers with a dedicated key. Feedback itself needs `RATE_KV`.
+   - Optional `FEEDBACK_SECRET` (secret) to sign answers so visitors can rate them, and `FEEDBACK_ADMIN_TOKEN` (secret) to export the feedback. Feedback needs both `FEEDBACK_SECRET` and `RATE_KV`.
    - Optional sign-in and access tiers: `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` (secret), `SESSION_SECRET` (secret, 32+ characters), `OWNER_EMAILS`, plus `RATE_KV`. See [Access tiers](#access-tiers-and-linkedin-sign-in).
    - Optional `SEMANTIC_CACHE=off` and `SEMANTIC_CACHE_THRESHOLD`; the cache needs `RATE_KV`.
    - Optional router models: `GEMINI_MODEL_LIGHT`, `GEMINI_MODEL_HEAVY`, `ANTHROPIC_MODEL_LIGHT`, and `MODEL_ROUTER=off`.

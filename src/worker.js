@@ -13,9 +13,12 @@
 //
 // Secret:   GEMINI_API_KEY (Pages project > Settings > Variables and Secrets)
 //           ANTHROPIC_API_KEY (optional): Claude answers when Gemini fails; ANTHROPIC_MODEL picks the
-//           model (default claude-opus-5-5), LLM_PRIMARY=claude makes Claude the first choice
+//           model (default claude-opus-5-5), LLM_PRIMARY=claude makes Claude the first choice;
+//           CLAUDE_DAILY_LIMIT (default 200) caps Claude runs per UTC day across all visitors (RATE_KV)
 // Optional: GEMINI_MODEL, GEMINI_EMBED_MODEL, RAG_EMBEDDINGS=off (BM25 only),
-//           RATE_KV (KV binding: per-IP hourly limit, an embedding cache, and visit-source counts),
+//           RATE_KV (KV binding: per-IP hourly limit (per /64 for IPv6), the Claude daily budget,
+//           an embedding cache, and visit-source counts),
+//           FEEDBACK_SECRET (secret): signs answers so they can be rated; feedback is off without it
 //           USAGE_AE (Workers Analytics Engine binding: one data point per answer, for cost and latency),
 //           GEMINI_PRICE_INPUT / GEMINI_PRICE_OUTPUT (USD per 1M tokens, to report cost)
 //
@@ -37,7 +40,7 @@ import { assessFit, JD_MIN, JD_MAX } from "./fit.js";
 
 const MAX_TURNS = 10;          // matches the page, which keeps the last 10 turns
 const MAX_CHARS = 1000;        // per message
-const HOURLY_LIMIT = 30;       // questions per IP per hour, only when RATE_KV is bound
+const HOURLY_LIMIT = 30;       // questions per IP (IPv6: per /64) per hour, only when RATE_KV is bound
 export const SEP = "\u001e";
 
 // Sources counted from ?ref= links (docs/listings.md hands these out). Anything else is ignored,
@@ -111,7 +114,7 @@ async function ask(request, env, fetchImpl, ctx) {
   const question = turns[turns.length - 1].content;
   const reply = async (text, meta) => {
     // Signs exactly what the visitor saw, so feedback can only rate answers the site gave.
-    if (env.RATE_KV) meta.fb = await feedbackToken(env, question, text);
+    if (feedbackEnabled(env)) meta.fb = await feedbackToken(env, question, text);
     return new Response(text + SEP + JSON.stringify({ ...meta, tier }), {
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });
@@ -208,7 +211,7 @@ async function fit(request, env, fetchImpl) {
 
 async function feedback(request, env) {
   if (!sameOrigin(request)) return json(403, { error: "forbidden" });
-  if (!env.RATE_KV) return json(503, { error: "not_configured" });
+  if (!feedbackEnabled(env)) return json(503, { error: "not_configured" });
   let body;
   try { body = await request.json(); } catch { return json(400, { error: "bad_json" }); }
   const { entry, error } = await feedbackEntry(env, body);
@@ -274,10 +277,40 @@ function sameOrigin(request) {
   return !origin || origin === new URL(request.url).origin;
 }
 
+// Feedback needs somewhere to store it and a dedicated signing key. Without either the page
+// shows no buttons and POST /api/feedback is 503.
+function feedbackEnabled(env) {
+  return Boolean(env.RATE_KV && env.FEEDBACK_SECRET);
+}
+
+// The rate-limit identity of a client address. An IPv6 visitor usually controls a whole /64 and
+// can rotate addresses inside it freely, so IPv6 is keyed on its first four hextets. IPv4 (and
+// IPv4-mapped IPv6) is keyed on the full address. Anything unparseable is used as given.
+export function rateLimitKey(ip) {
+  const raw = String(ip || "").trim().toLowerCase();
+  if (!raw) return "unknown";
+  if (!raw.includes(":")) return raw;
+  const addr = raw.split("%")[0];
+  const mapped = addr.match(/^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (mapped) return mapped[1];
+  const halves = addr.split("::");
+  if (halves.length > 2) return raw;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  // an embedded IPv4 tail (a.b.c.d) takes two hextets
+  const width = (parts) => parts.reduce((n, p) => n + (p.includes(".") ? 2 : 1), 0);
+  const fill = halves.length === 2 ? 8 - width(head) - width(tail) : 0;
+  if (fill < 0 || (halves.length === 1 && width(head) !== 8)) return raw;
+  const groups = [...head, ...Array(fill).fill("0"), ...tail].slice(0, 4);
+  if (!groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return raw;
+  return groups.map((g) => parseInt(g, 16).toString(16)).join(":") + "::/64";
+}
+
 // Fails open: if KV is down or past the free plan's daily write cap, answering unmetered
-// beats failing every visitor until the cap resets.
+// beats failing every visitor until the cap resets. (The Claude daily budget in providers.js
+// fails closed, so cost stays bounded either way.)
 async function underLimit(kv, request) {
-  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const ip = rateLimitKey(request.headers.get("cf-connecting-ip"));
   const key = `ask:${ip}:${Math.floor(Date.now() / 3600000)}`;
   try {
     const n = parseInt((await kv.get(key)) || "0", 10);

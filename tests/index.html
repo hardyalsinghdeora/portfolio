@@ -29,10 +29,10 @@
 import { PROFILE } from "../src/knowledge.js";
 import { buildChunks, buildIndex, bm25, search, rrf, tokenize } from "../src/rag.js";
 import { runAgent, MAX_STEPS, SYSTEM } from "../src/agent.js";
-import { handle, validTurns, SEP, recordUsage, getIndex } from "../src/worker.js";
+import { handle, validTurns, SEP, recordUsage, getIndex, rateLimitKey } from "../src/worker.js";
 import { assessFit, JD_MIN, JD_MAX, FIT_TIER_RULES } from "../src/fit.js";
 import { PHONE, REDLINES, COMPENSATION, guardText, LEAK_WORDS } from "../src/guard.js";
-import { claudeAgent, toJsonSchema, runAgentWithFallback, CLAUDE_VERSION } from "../src/providers.js";
+import { claudeAgent, toJsonSchema, runAgentWithFallback, CLAUDE_VERSION, CLAUDE_MAX_TOKENS, CLAUDE_JSON_MAX_TOKENS, CLAUDE_DAILY_LIMIT, claudeBudgetKey, takeClaudeBudget } from "../src/providers.js";
 import { feedbackToken, toEvalCandidates, FEEDBACK_TTL, MAX_COMMENT } from "../src/feedback.js";
 import { checkAnswer, runEvals, scorecardMarkdown, failed as runFailed } from "../evals/harness.mjs";
 import { buildListings, listingsMarkdown, LIMITS } from "../scripts/listings.mjs";
@@ -347,6 +347,8 @@ await test("claude: request shape, tool loop with thinking echoed back, usage an
   eq(c0.headers["anthropic-version"], CLAUDE_VERSION); eq(CLAUDE_VERSION, "2026-10-21"); eq(c0.headers["x-api-key"], "sk-test");
   eq(c0.headers["anthropic-beta"], "server-side-fallback-2026-07-01"); eq(c0.body.fallbacks, "default");
   eq(c0.body.model, "claude-opus-5-5"); eq(c0.body.system, SYSTEM);
+  eq(CLAUDE_MAX_TOKENS, 1500); assert(calls.every((c) => c.body.max_tokens === CLAUDE_MAX_TOKENS), "every step capped at 1500 output tokens");
+  eq(c0.body.output_config.effort, "low", "low effort keeps always-on thinking inside the cap");
   assert(!("temperature" in c0.body) && !("top_p" in c0.body), "no sampling parameters on API version 2026-10-21");
   assert(calls.every((c) => c.body.tool_choice.type !== "any" && c.body.tool_choice.type !== "tool"), "never forced tool use");
   eq(c0.body.tool_choice.type, "auto");
@@ -383,6 +385,12 @@ await test("claude: a refusal ends the answer without content", async () => {
   const r = await runAgent({ turns, index, profile: PROFILE, env: claudeEnv, fetchImpl, provider: claudeAgent(claudeEnv, fetchImpl) });
   assert(/Email me/.test(r.text)); eq(r.sources.length, 0);
 });
+await test("claude: a step cut off at max_tokens runs no half-written tool call", async () => {
+  const calls = [];
+  const fetchImpl = mockClaude([[thinking, { type: "text", text: "Partial answer" }, toolUse("t1", "search_profile", { query: "x" })]], calls, { stop: "max_tokens" });
+  const r = await runAgent({ turns, index, profile: PROFILE, env: claudeEnv, fetchImpl, provider: claudeAgent(claudeEnv, fetchImpl) });
+  eq(r.text, "Partial answer"); eq(r.steps.length, 0, "no tool ran"); eq(calls.length, 2, "first step nudged once, then answered");
+});
 await test("fallback: Gemini failure reruns on Claude, for answers and job fit", async () => {
   const geminiDown = async (url) => url.includes("generativelanguage") ? new Response("quota", { status: 429 }) : null;
   const route = (claude) => async (url, init) => (await geminiDown(url, init)) || claude(url, init);
@@ -412,6 +420,7 @@ await test("fallback: Gemini failure reruns on Claude, for answers and job fit",
   eq(fit.requirements[0].match, "strong"); eq(fitCalls.length, 2);
   const fmt = fitCalls[1].body.output_config.format;
   eq(fmt.type, "json_schema"); eq(fmt.schema.additionalProperties, false); eq(fmt.schema.properties.results.items.additionalProperties, false);
+  eq(CLAUDE_JSON_MAX_TOKENS, 2000); assert(fitCalls.every((c) => c.body.max_tokens === CLAUDE_JSON_MAX_TOKENS && c.body.output_config.effort === "low"), "fit calls capped");
   eq(fit.usage.fallback.from, "gemini"); eq(fit.usage.model, "claude-opus-5-5");
 });
 // In-memory KV with the parts of the API the Worker uses, including list() and put options.
@@ -426,14 +435,20 @@ function memKV() {
 }
 await test("feedback: answers are signed, and only signed answers can be rated", async () => {
   const kv = memKV();
-  const E = { ...env, ASSETS: assets, RATE_KV: kv };
+  const FB = { FEEDBACK_SECRET: "fb-secret-for-tests" };
+  const E = { ...env, ...FB, ASSETS: assets, RATE_KV: kv };
   const script = [[{ functionCall: { name: "search_profile", args: { query: "x" } } }], [{ text: "I build bounded agents." }]];
   const asked = await handle(post({ messages: turns }), E, mockGemini({ script }));
   const [answer, metaRaw] = (await asked.text()).split(SEP);
   const meta = JSON.parse(metaRaw);
-  eq(meta.fb, await feedbackToken(env, turns[0].content, answer)); eq(meta.fb.length, 32);
-  const noKv = JSON.parse((await (await handle(post({ messages: turns }), { ...env, ASSETS: assets }, mockGemini({ script }))).text()).split(SEP)[1]);
+  eq(meta.fb, await feedbackToken({ ...env, ...FB }, turns[0].content, answer)); eq(meta.fb.length, 32);
+  const noKv = JSON.parse((await (await handle(post({ messages: turns }), { ...env, ...FB, ASSETS: assets }, mockGemini({ script }))).text()).split(SEP)[1]);
   assert(!("fb" in noKv), "no feedback store, no buttons");
+  // No FEEDBACK_SECRET: the LLM API keys are never used as the signing key; feedback is off.
+  const keysOnly = { ...env, ANTHROPIC_API_KEY: "sk-test", ASSETS: assets, RATE_KV: memKV() };
+  eq(await feedbackToken(keysOnly, turns[0].content, answer), null, "no signing key from API keys");
+  const noSecret = JSON.parse((await (await handle(post({ messages: turns }), keysOnly, mockGemini({ script }))).text()).split(SEP)[1]);
+  assert(!("fb" in noSecret), "no FEEDBACK_SECRET, no buttons");
 
   const fb = (body, extra = {}) => handle(req("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { ...E, ...extra }, mockGemini());
   const base = { question: turns[0].content, answer, token: meta.fb, sources: ["agentic-overview"], retrieval: "bm25", model: "gemini-x" };
@@ -448,6 +463,7 @@ await test("feedback: answers are signed, and only signed answers can be rated",
   eq((await fb({ ...base, rating: "down", answer: "I have 20 years of Rust." })).status, 400, "forged answer rejected");
   eq((await fb({ ...base, rating: "meh" })).status, 400);
   eq((await fb({ ...base, rating: "up" }, { RATE_KV: undefined })).status, 503);
+  eq((await fb({ ...base, rating: "up" }, { FEEDBACK_SECRET: undefined })).status, 503, "off without FEEDBACK_SECRET, like without KV");
   eq((await handle(req("/api/feedback", { method: "PUT" }), E, mockGemini())).status, 405);
   const crossSite = { url: "https://hardyalsinghdeora.pages.dev/api/feedback", method: "POST", headers: new Headers({ origin: "https://evil.example" }), json: async () => ({ ...base, rating: "up" }) };
   eq((await handle(crossSite, E, mockGemini())).status, 403);
@@ -499,6 +515,67 @@ await test("worker: rate limit counts per IP, and a failing KV store lets reques
   eq((await handle(post({ messages: turns }, ip), { ...E, RATE_KV: full }, answer())).status, 200, "write limit");
   const down = { get: async () => { throw new Error("KV unavailable"); }, put: async () => {} };
   eq((await handle(post({ messages: turns }, ip), { ...E, RATE_KV: down }, answer())).status, 200, "read failure");
+});
+await test("worker: IPv6 visitors share one hourly limit per /64", async () => {
+  eq(rateLimitKey("203.0.113.7"), "203.0.113.7");
+  eq(rateLimitKey("2001:db8:1:2:3:4:5:6"), "2001:db8:1:2::/64");
+  eq(rateLimitKey("2001:0DB8:0001:0002:FFFF::1"), "2001:db8:1:2::/64", "case and leading zeros normalised");
+  eq(rateLimitKey("2001:db8:1:2::9"), "2001:db8:1:2::/64", "compressed form");
+  eq(rateLimitKey("2001:db8::"), "2001:db8:0:0::/64");
+  eq(rateLimitKey("fe80::1%eth0"), "fe80:0:0:0::/64", "zone id dropped");
+  eq(rateLimitKey("::ffff:198.51.100.4"), "198.51.100.4", "IPv4-mapped is IPv4");
+  eq(rateLimitKey(""), "unknown"); eq(rateLimitKey(null), "unknown");
+  eq(rateLimitKey("not:an::ip::x"), "not:an::ip::x", "unparseable used as given");
+  const answer = () => mockGemini({ script: [[{ functionCall: { name: "search_profile", args: { query: "agents" } } }], [{ text: "Bounded agents." }]] });
+  const kv = memKV();
+  const E = { ...env, ASSETS: assets, RATE_KV: kv };
+  eq((await handle(post({ messages: turns }, { "cf-connecting-ip": "2001:db8:1:2::a" }), E, answer())).status, 200);
+  const [key] = [...kv.data.keys()].filter((k) => k.startsWith("ask:"));
+  assert(key.startsWith("ask:2001:db8:1:2::/64:"), "keyed on the /64: " + key);
+  kv.data.set(key, "30");
+  eq((await handle(post({ messages: turns }, { "cf-connecting-ip": "2001:db8:1:2:ffff:1:2:3" }), E, answer())).status, 429, "another address in the same /64");
+  eq((await handle(post({ messages: turns }, { "cf-connecting-ip": "2001:db8:1:3::a" }), E, answer())).status, 200, "a different /64");
+});
+await test("fallback: a global daily budget caps Claude runs, then the visitor gets the busy reply", async () => {
+  const day = new Date("2026-11-07T12:00:00Z");
+  eq(claudeBudgetKey(day), "claude:2026-11-07"); eq(CLAUDE_DAILY_LIMIT, 200);
+  // takeClaudeBudget: counts, stops at the limit, honours CLAUDE_DAILY_LIMIT, fails closed on KV errors.
+  const kv = memKV();
+  assert(await takeClaudeBudget({ RATE_KV: kv }, day)); eq(kv.data.get("claude:2026-11-07"), "1");
+  assert(kv.opts.get("claude:2026-11-07").expirationTtl > 86400, "the counter expires on its own");
+  kv.data.set("claude:2026-11-07", String(CLAUDE_DAILY_LIMIT));
+  assert(!(await takeClaudeBudget({ RATE_KV: kv }, day)), "default limit reached");
+  assert(await takeClaudeBudget({ RATE_KV: kv, CLAUDE_DAILY_LIMIT: "500" }, day), "configurable");
+  assert(!(await takeClaudeBudget({ RATE_KV: memKV(), CLAUDE_DAILY_LIMIT: "0" }, day)), "0 turns the fallback off");
+  assert(await takeClaudeBudget({}, day), "no RATE_KV: no budget, as before");
+  const broken = { get: async () => { throw new Error("KV unavailable"); }, put: async () => {} };
+  assert(!(await takeClaudeBudget({ RATE_KV: broken }, day)), "KV failure skips Claude");
+  const full = { get: async () => null, put: async () => { throw new Error("KV put() limit exceeded for the day."); } };
+  assert(!(await takeClaudeBudget({ RATE_KV: full }, day)), "KV write cap skips Claude");
+
+  // End to end: Gemini 429s; Claude answers while the budget lasts, then the page's busy reply.
+  // A question no earlier test asked, so the in-memory answer cache can't answer it.
+  const q = [{ role: "user", content: "Which budget limits the paid model fallback on this site?" }];
+  const claudeCalls = [];
+  const claude = mockClaude([[toolUse("t1", "search_profile", { query: "x" })], [{ type: "text", text: "From Claude." }]], claudeCalls);
+  const route = async (url, init) => url.includes("generativelanguage") ? new Response("quota", { status: 429 }) : claude(url, init);
+  const store = memKV();
+  const E = { ...claudeEnv, ASSETS: assets, RATE_KV: store, CLAUDE_DAILY_LIMIT: "1" };
+  const ip = (n) => ({ "cf-connecting-ip": "198.51.100." + n });
+  eq((await handle(post({ messages: q }, ip(1)), E, route)).status, 200);
+  eq(store.data.get(claudeBudgetKey()), "1"); const used = claudeCalls.length; assert(used > 0);
+  const res = await handle(post({ messages: q }, ip(2)), E, route);
+  eq(res.status, 429); eq((await res.json()).error, "upstream", "the normal busy response");
+  eq(claudeCalls.length, used, "no Claude call past the budget");
+  // Job fit is bounded by the same budget.
+  const fitRes = await handle(req("/api/fit", { method: "POST", headers: { "content-type": "application/json", ...ip(3) },
+    body: JSON.stringify({ jd: "Backend engineer with PostgreSQL schema design and migrations in production, plus Node.js services." }) }), E, route);
+  eq(fitRes.status, 429); eq(claudeCalls.length, used);
+  // LLM_PRIMARY=claude past the budget: Gemini answers instead.
+  const gemini = mockGemini({ script: [[{ functionCall: { name: "search_profile", args: { query: "x" } } }], [{ text: "From Gemini." }]] });
+  const both = async (url, init) => url.includes("generativelanguage") ? gemini(url, init) : claude(url, init);
+  const primary = await runAgentWithFallback({ turns: q, index, profile: PROFILE, env: { ...E, RAG_EMBEDDINGS: "off", LLM_PRIMARY: "claude" }, fetchImpl: both });
+  eq(primary.text, "From Gemini."); eq(claudeCalls.length, used);
 });
 await test("worker: ?ref= links count visits and questions per source, and nothing else", async () => {
   const answer = () => mockGemini({ script: [
@@ -867,7 +944,7 @@ await test("worker: private passages reach the model only for an approved recrui
 await test("semantic cache: exact and semantic hits skip the model; similar wording about a different topic doesn't hit", async () => {
   freshState();
   const kv = memKV();
-  const E = { ...env, ASSETS: assets, RATE_KV: kv, GEMINI_API_KEY: "test", RAG_EMBEDDINGS: "on", GEMINI_EMBED_MODEL: "cache-" + Math.random() };
+  const E = { ...env, ASSETS: assets, RATE_KV: kv, FEEDBACK_SECRET: "fb-secret-for-tests", GEMINI_API_KEY: "test", RAG_EMBEDDINGS: "on", GEMINI_EMBED_MODEL: "cache-" + Math.random() };
   const script = [[{ functionCall: { name: "search_profile", args: { query: "agents" } } }], [{ text: "I build bounded agents." }]];
   const askOnce = async (q, msgs) => {
     const calls = [];

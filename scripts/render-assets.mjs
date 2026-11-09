@@ -31,7 +31,7 @@ const card = `<!doctype html><html><body style="margin:0">
   </div>
   <div style="display:flex;align-items:center;gap:14px;font-size:26px;color:#8189F5;position:relative">
     <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#54C6B4"></span>
-    Ask my portfolio agent anything &#183; hardyalsinghdeora.pages.dev
+    Ask my portfolio agent anything &#183; hardyal.is-a.dev
   </div>
 </div></body></html>`;
 

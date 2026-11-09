@@ -1,5 +1,5 @@
 // Pulls visitor feedback from the live site and drafts eval cases from the thumbs-down answers.
-//   FEEDBACK_ADMIN_TOKEN=... node scripts/feedback.mjs [--site https://hardyalsinghdeora.pages.dev] [--limit 200]
+//   FEEDBACK_ADMIN_TOKEN=... node scripts/feedback.mjs [--site https://hardyal.is-a.dev] [--limit 200]
 // Prints a summary and writes evals/results/feedback.json (every entry) and
 // evals/results/feedback-candidates.json (drafts to finish and move into evals/answers.json).
 // The token is the FEEDBACK_ADMIN_TOKEN secret set on the Pages project.
@@ -10,7 +10,7 @@ import { toEvalCandidates } from "../src/feedback.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const arg = (name, dflt) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : dflt; };
-const site = arg("--site", "https://hardyalsinghdeora.pages.dev").replace(/\/+$/, "");
+const site = arg("--site", "https://hardyal.is-a.dev").replace(/\/+$/, "");
 const token = process.env.FEEDBACK_ADMIN_TOKEN;
 if (!token) { console.error("FEEDBACK_ADMIN_TOKEN is not set"); process.exit(2); }
 

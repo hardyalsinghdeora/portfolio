@@ -26,13 +26,13 @@ In numbers:
 • ≤ 4 model calls per question in the portfolio agent's bounded function-calling loop (retrieve first, answer last)
 • 15 years building backend and platform systems
 
-Ask my portfolio agent anything about my work (it answers from my profile and shows its sources): https://hardyalsinghdeora.pages.dev/?ref=linkedin
+Ask my portfolio agent anything about my work (it answers from my profile and shows its sources): https://hardyal.is-a.dev/?ref=linkedin
 
-Decision records: https://hardyalsinghdeora.pages.dev/case/db-migration and https://hardyalsinghdeora.pages.dev/case/php-to-node
+Decision records: https://hardyal.is-a.dev/case/db-migration and https://hardyal.is-a.dev/case/php-to-node
 
 Open to Agentic AI Architect and AI Platform / AI Technical Architect roles. Notice period 30 days. Email: hardyalsinghdeora@gmail.com
 ```
-2224 / 2600 characters
+2191 / 2600 characters
 
 **Skills to add** (in the profile, missing from LinkedIn's listed skills)
 
@@ -67,7 +67,7 @@ Open to Agentic AI Architect and AI Platform / AI Technical Architect roles. Not
 - Staff Software Engineer
 - Software Architect
 
-**Contact info → Website** and the **Featured** section: https://hardyalsinghdeora.pages.dev/?ref=linkedin
+**Contact info → Website** and the **Featured** section: https://hardyal.is-a.dev/?ref=linkedin
 
 ## Naukri
 
@@ -91,11 +91,11 @@ Agentic AI, LLM Agents, Generative AI, Retrieval-Augmented Generation (RAG), Mod
 
 **Online profile / Projects**
 
-- Portfolio: https://hardyalsinghdeora.pages.dev/?ref=naukri
+- Portfolio: https://hardyal.is-a.dev/?ref=naukri
 - GitHub: https://github.com/hardyalsinghdeora
 - Case studies: https://github.com/hardyalsinghdeora/case-studies
 
-**Resume file:** download https://hardyalsinghdeora.pages.dev/resume-agentic-ai.pdf and upload it (single column, parses cleanly).
+**Resume file:** download https://hardyal.is-a.dev/resume-agentic-ai.pdf and upload it (single column, parses cleanly).
 
 ## Tracking
 

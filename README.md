@@ -1,6 +1,6 @@
 # Portfolio agent: hybrid RAG + tool-calling on Cloudflare Workers
 
-Source for **[hardyalsinghdeora.pages.dev](https://hardyalsinghdeora.pages.dev/)**, the portfolio of Hardyal Singh Deora, Agentic AI Architect and Principal Software Engineer.
+Source for **[hardyal.is-a.dev](https://hardyal.is-a.dev/)**, the portfolio of Hardyal Singh Deora, Agentic AI Architect and Principal Software Engineer.
 
 The page is a chat. Ask it anything about my work and an **agent** answers. It decides what to look up, retrieves evidence from my career profile with **hybrid RAG**, answers only from what it retrieved, and shows the sources and the tool calls behind every answer.
 
@@ -216,7 +216,7 @@ How it's enforced, in code rather than in the prompt:
 - The semantic cache keeps one namespace per tier, so a recruiter's answer is never replayed to a public visitor.
 
 **Setup:**
-1. Create an app at [linkedin.com/developers](https://www.linkedin.com/developers/apps), add the **Sign In with LinkedIn using OpenID Connect** product, and add the redirect URL `https://hardyalsinghdeora.pages.dev/auth/callback`.
+1. Create an app at [linkedin.com/developers](https://www.linkedin.com/developers/apps), add the **Sign In with LinkedIn using OpenID Connect** product, and add the redirect URL `https://hardyal.is-a.dev/auth/callback`.
 2. In the Pages project, set `LINKEDIN_CLIENT_ID`, the secrets `LINKEDIN_CLIENT_SECRET` and `SESSION_SECRET` (32+ random characters), and `OWNER_EMAILS` (the email on your LinkedIn account). Bind `RATE_KV`. Without all of these, sign-in stays off and everyone is public.
 3. Write `knowledge/private/recruiter.json` and `owner.json` (shape: `knowledge/private.example.json`), then run `KV_NAMESPACE_ID=<RATE_KV id> node scripts/private-kb.mjs --upload`. The script refuses phone numbers anywhere, compensation in the recruiter file, and unfinished `[FILL]` placeholders.
 

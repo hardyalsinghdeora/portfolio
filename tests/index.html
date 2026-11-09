@@ -233,7 +233,7 @@ await test("agent: thought parts are never shown", async () => {
 });
 
 // ---- worker ----
-function req(path, init = {}) { return new Request("https://hardyalsinghdeora.pages.dev" + path, init); }
+function req(path, init = {}) { return new Request("https://hardyal.is-a.dev" + path, init); }
 const post = (body, headers = {}) => req("/api/ask", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 const assets = { fetch: async () => new Response("static") };
 
@@ -465,7 +465,7 @@ await test("feedback: answers are signed, and only signed answers can be rated",
   eq((await fb({ ...base, rating: "up" }, { RATE_KV: undefined })).status, 503);
   eq((await fb({ ...base, rating: "up" }, { FEEDBACK_SECRET: undefined })).status, 503, "off without FEEDBACK_SECRET, like without KV");
   eq((await handle(req("/api/feedback", { method: "PUT" }), E, mockGemini())).status, 405);
-  const crossSite = { url: "https://hardyalsinghdeora.pages.dev/api/feedback", method: "POST", headers: new Headers({ origin: "https://evil.example" }), json: async () => ({ ...base, rating: "up" }) };
+  const crossSite = { url: "https://hardyal.is-a.dev/api/feedback", method: "POST", headers: new Headers({ origin: "https://evil.example" }), json: async () => ({ ...base, rating: "up" }) };
   eq((await handle(crossSite, E, mockGemini())).status, 403);
   const busy = memKV(); busy.get = async () => "30";
   eq((await fb({ ...base, rating: "up" }, { RATE_KV: busy })).status, 429);
@@ -491,7 +491,7 @@ await test("worker: errors and guards", async () => {
   eq((await handle(req("/api/ask", { method: "POST", body: "{" }), E, mockGemini())).status, 400);
   eq((await handle(post({ messages: turns }), { ASSETS: assets }, mockGemini())).status, 503);
   // Browsers drop a forged Origin on Request objects, so use a request-like object here.
-  const crossSite = { url: "https://hardyalsinghdeora.pages.dev/api/ask", method: "POST",
+  const crossSite = { url: "https://hardyal.is-a.dev/api/ask", method: "POST",
     headers: new Headers({ origin: "https://evil.example" }), json: async () => ({ messages: turns }) };
   eq((await handle(crossSite, E, mockGemini())).status, 403);
   eq((await handle(post({ messages: turns }), E, mockGemini({ script: "429" }))).status, 429);
@@ -591,7 +591,7 @@ await test("worker: ?ref= links count visits and questions per source, and nothi
   await handle(req("/?ref=linkedin", { headers: browser }), E, answer());
   eq(store.get(`ref:visit:linkedin:${month}`), "2");
   // Browsers drop a user-agent set on Request objects, so use a request-like object here.
-  const bot = { url: "https://hardyalsinghdeora.pages.dev/?ref=linkedin", method: "GET", headers: new Headers({ "user-agent": "LinkedInBot/1.0" }) };
+  const bot = { url: "https://hardyal.is-a.dev/?ref=linkedin", method: "GET", headers: new Headers({ "user-agent": "LinkedInBot/1.0" }) };
   await handle(bot, E, answer());
   await handle(req("/?ref=anything-else", { headers: browser }), E, answer());
   await handle(req("/resume-agentic-ai.html?ref=naukri", { headers: browser }), E, answer());
@@ -739,7 +739,7 @@ await test("worker: short case-study links redirect to the write-ups", async () 
     eq(res.status, 302, path);
     assert(res.headers.get("location").startsWith("https://github.com/hardyalsinghdeora/"), path);
   }
-  assert(JSON.stringify(PROFILE).includes("pages.dev/case/php-to-node"), "profile uses the short link");
+  assert(JSON.stringify(PROFILE).includes("is-a.dev/case/php-to-node"), "profile uses the short link");
 });
 await test("validTurns trims history and rejects malformed turns", () => {
   eq(validTurns([{ role: "assistant", content: "x" }, { role: "user", content: " hi " }]), [{ role: "user", content: "hi" }]);
@@ -877,7 +877,7 @@ await test("sign-in: LinkedIn OpenID Connect with state check, then request, app
   const loc = new URL(start.headers.get("location"));
   eq(loc.origin + loc.pathname, "https://www.linkedin.com/oauth/v2/authorization");
   eq(loc.searchParams.get("scope"), "openid profile email");
-  eq(loc.searchParams.get("redirect_uri"), "https://hardyalsinghdeora.pages.dev/auth/callback");
+  eq(loc.searchParams.get("redirect_uri"), "https://hardyal.is-a.dev/auth/callback");
   const state = loc.searchParams.get("state");
   assert(start.cookies[0].startsWith("li_state=" + state) && /HttpOnly; Secure; SameSite=Lax/.test(start.cookies[0]));
   const seen = [];

@@ -3,9 +3,9 @@
     "purpose": "Machine-readable career profile for recruiters and hiring managers",
     "updated": "2026-11-05",
     "human_versions": {
-      "portfolio": "https://hardyalsinghdeora.pages.dev/",
+      "portfolio": "https://hardyal.is-a.dev/",
       "resume": "https://hardyalsinghdeora.github.io/case-studies/resume.html",
-      "resume_agentic_ai_architect": "https://hardyalsinghdeora.pages.dev/resume-agentic-ai.html",
+      "resume_agentic_ai_architect": "https://hardyal.is-a.dev/resume-agentic-ai.html",
       "portfolio_source": "https://github.com/hardyalsinghdeora/portfolio"
     }
   },
@@ -445,7 +445,7 @@
   ],
   "migration_case_study": {
     "title": "Moving a live commerce platform between two databases without a maintenance window",
-    "url": "https://hardyalsinghdeora.pages.dev/case/db-migration",
+    "url": "https://hardyal.is-a.dev/case/db-migration",
     "context": "B2B commerce platform selling annual seat-based contracts; six product lines, each with its own pricing shape; a dozen services; a ~20-year-old MySQL estate replaced by domain services on PostgreSQL, both live with customers throughout. Legacy products were not retired, so the result was two systems of record, both live, converging slowly.",
     "options_rejected": [
       "Freeze, dump, restore: unbounded failure mode, no quick way back from a failed restore",
@@ -486,7 +486,7 @@
   },
   "modernisation_case_study": {
     "title": "Replacing a live PHP application with Node.js microservices and Angular, without users noticing",
-    "url": "https://hardyalsinghdeora.pages.dev/case/php-to-node",
+    "url": "https://hardyal.is-a.dev/case/php-to-node",
     "role": "Designed and led it, as Lead Software Engineer (2020-2024), with a team of 2 developers. A separate project from the later MySQL-to-PostgreSQL commerce migration.",
     "numbers": {
       "pages_migrated": 70,
@@ -589,7 +589,7 @@
       "name": "Portfolio agent with hybrid RAG",
       "status": "Live",
       "url": "https://github.com/hardyalsinghdeora/portfolio",
-      "summary": "The 'Ask me anything' chat on hardyalsinghdeora.pages.dev. A Cloudflare Worker runs a bounded Gemini function-calling loop: the model chooses tools (search_profile, get_section, get_contact_and_availability), retrieval ranks chunks of a structured career profile with BM25 and Gemini embeddings fused by reciprocal rank fusion, and every answer ships with the sources it used. Includes a retrieval eval set and a zero-dependency test page."
+      "summary": "The 'Ask me anything' chat on hardyal.is-a.dev. A Cloudflare Worker runs a bounded Gemini function-calling loop: the model chooses tools (search_profile, get_section, get_contact_and_availability), retrieval ranks chunks of a structured career profile with BM25 and Gemini embeddings fused by reciprocal rank fusion, and every answer ships with the sources it used. Includes a retrieval eval set and a zero-dependency test page."
     },
     {
       "name": "claude-toolkit",

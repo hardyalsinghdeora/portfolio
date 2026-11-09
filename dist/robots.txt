@@ -4,4 +4,4 @@ Disallow: /api/
 Disallow: /auth/
 Disallow: /admin.html
 
-Sitemap: https://hardyalsinghdeora.pages.dev/sitemap.xml
+Sitemap: https://hardyal.is-a.dev/sitemap.xml

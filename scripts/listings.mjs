@@ -3,7 +3,7 @@
 // the build if any field is over the site's character limit. Plain ES module with no imports,
 // so tests/index.html can check it too.
 
-const SITE = "https://hardyalsinghdeora.pages.dev/";
+const SITE = "https://hardyal.is-a.dev/";
 const RESUME_PDF = SITE + "resume-agentic-ai.pdf";
 
 // Character limits as the sites enforce them (Naukri's summary box is about 1,000).

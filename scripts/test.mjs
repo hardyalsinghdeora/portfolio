@@ -50,10 +50,10 @@ try {
 try {
   const { default: worker } = await import(pathToFileURL(join(root, "dist/_worker.js")).href);
   const env = { ASSETS: { fetch: async () => new Response("static") } };
-  const search = await worker.fetch(new Request("https://hardyalsinghdeora.pages.dev/api/search?q=RAG%20agent&k=3"), env);
+  const search = await worker.fetch(new Request("https://hardyal.is-a.dev/api/search?q=RAG%20agent&k=3"), env);
   const data = await search.json();
   if (search.status !== 200 || data.hits.length !== 3) throw new Error("/api/search " + search.status);
-  const ask = await worker.fetch(new Request("https://hardyalsinghdeora.pages.dev/api/ask", { method: "POST", body: "{}" }), env);
+  const ask = await worker.fetch(new Request("https://hardyal.is-a.dev/api/ask", { method: "POST", body: "{}" }), env);
   if (ask.status !== 503) throw new Error("/api/ask without a key should be 503, got " + ask.status);
   console.log("bundle smoke test: passed (" + data.hits.map((h) => h.id).join(", ") + ")");
 } catch (e) {

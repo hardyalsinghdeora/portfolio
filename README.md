@@ -335,6 +335,7 @@ Edit `knowledge/profile.json` and run `npm test`. That regenerates `src/knowledg
 - [api-gateway-rate-limiter](https://github.com/hardyalsinghdeora/api-gateway-rate-limiter): rate limiting, circuit breaking and safe retries in a small TypeScript gateway
 - [event-outbox-worker](https://github.com/hardyalsinghdeora/event-outbox-worker): transactional outbox, at-least-once relay and idempotent consumer
 - [db-migration-reconciler](https://github.com/hardyalsinghdeora/db-migration-reconciler): checksum, diff and backfill tooling for a migration with no maintenance window
+- [low-level-design](https://github.com/hardyalsinghdeora/low-level-design), [system-design](https://github.com/hardyalsinghdeora/system-design) and [design-patterns](https://github.com/hardyalsinghdeora/design-patterns): backend design interview prep in TypeScript, with diagrams, trade-offs and tested code
 - [docs/case-study-php-to-node-strangler.md](docs/case-study-php-to-node-strangler.md): replacing a live PHP app with Node.js + Angular through a strangler migration with a shared login
 - [LinkedIn](https://www.linkedin.com/in/hardyalsinghdeora) · [Substack](https://substack.com/@hardyalsingh)
 

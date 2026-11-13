@@ -49,7 +49,7 @@ Constraints: Cloudflare Pages free tier, deployment by dashboard drag-and-drop (
 
 ## Evaluation
 
-`tests/evals.json` holds 49 questions recruiters actually ask. They include "do you know Kubernetes / LangGraph / Bedrock?" and 13 Gen AI interview questions, such as hallucination control, token cost, structured output and "why no vector database?". Each question lists the chunks that should answer it. On BM25 alone, the worst case, the result is **hit@5 = 49/49** and **hit@1 = 35/49**.
+`tests/evals.json` holds 53 questions recruiters actually ask. They include "do you know Kubernetes / LangGraph / Bedrock?" and 13 Gen AI interview questions, such as hallucination control, token cost, structured output and "why no vector database?". Each question lists the chunks that should answer it. On BM25 alone, the worst case, the result is **hit@5 = 49/49** and **hit@1 = 35/49**.
 
 Adding the working-familiarity chunks first regressed one question ("What are you working on right now?" matched the word "working"). The eval caught it, and a synonym for "now" / "currently" fixed it. That's the reason to keep the eval in the build. `npm test` runs it headlessly, and CI won't deploy unless it passes. Expanding the set for Gen AI questions surfaced two more stemming gaps ("backfill" vs "backfilled", "safe" vs "safety"), and both were fixed with synonyms.
 

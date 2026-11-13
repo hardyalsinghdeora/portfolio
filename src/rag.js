@@ -177,7 +177,9 @@ export function buildChunks(p) {
   add("current-focus", "What I'm working on in 2026", "current_focus_2026", list(p.current_focus_2026));
   (p.projects || []).forEach((pr, i) => {
     add("project-" + i, `Project: ${pr.name}`, "projects",
-      `Status: ${pr.status || "n/a"}${pr.url ? "\nURL: " + pr.url : ""}\n${pr.summary}` +
+      `Status: ${pr.status || "n/a"}${pr.url ? "\nURL: " + pr.url : ""}` +
+      (pr.links ? "\nLinks:\n" + list(Object.values(pr.links).filter((u) => u !== pr.url)) : "") +
+      `\n${pr.summary}` +
       (pr.tools ? "\nTools:\n" + list(pr.tools) : "") +
       (pr.design_principles ? "\nDesign principles:\n" + list(pr.design_principles) : ""));
   });

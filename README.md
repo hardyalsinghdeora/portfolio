@@ -133,7 +133,7 @@ src/worker.js            HTTP routing, validation, rate limiting, response forma
 src/knowledge.js         generated from profile.json by the build
 public/                  the page (index.html) and the Agentic AI Architect résumé
 tests/index.html         zero-dependency test page: unit tests + agent-loop tests with a mocked Gemini
-tests/evals.json         retrieval eval set (49 recruiter questions → expected chunks)
+tests/evals.json         retrieval eval set (53 recruiter questions → expected chunks)
 .github/workflows/       deploy.yml: tests, then deploy on every push to main; evals.yml: nightly live-model evals
 scripts/build.mjs        builds dist/ and bundles src/ into one dist/_worker.js (Node, no dependencies)
 scripts/test.mjs         runs tests/index.html headlessly in Chromium, then smoke-tests dist/_worker.js
@@ -169,7 +169,7 @@ npm test          # build, then run every test headlessly
   - the eval harness itself: its deterministic checks, and a full run against a fake model that must catch a leaked salary, an unfaithful answer and a job-fit overclaim;
   - Worker guards: 405, 400, 403, 429 and 503, plus the per-IP rate limit (IPv6 keyed per /64), which lets requests through if KV fails or hits its daily write cap, the Claude daily budget, which fails closed, and visit-source counting;
   - the content rules: working-familiarity skills never leak into production skills, every `get_section` value resolves, and **no employer-internal names or verbal-only company numbers appear in the knowledge base or either public page**.
-- **Retrieval eval (BM25 only, the worst case):** hit@5 = 49/49, hit@1 = 35/49. The set includes 13 Gen AI interview questions, for example "how do you prevent hallucinations?", "why no vector database?" and "how do you get structured JSON from an LLM?".
+- **Retrieval eval (BM25 only, the worst case):** hit@5 = 53/53, hit@1 = 38/53. The set includes 13 Gen AI interview questions, for example "how do you prevent hallucinations?", "why no vector database?" and "how do you get structured JSON from an LLM?".
 
 **CI gate:** the `test` job must pass before the `deploy` job runs. The deploy job then rebuilds `dist/` from the tested sources.
 
@@ -180,7 +180,7 @@ npm test          # build, then run every test headlessly
 - **Answers** (`evals/answers.json`, 49 cases). Each case gets deterministic checks for facts, migration separation, links, refusals and grounding. Every answer is also checked against the redline and phone patterns in `src/guard.js`.
 - **Faithfulness.** An LLM judge checks each answer against every passage the agent was shown. Set `EVAL_JUDGE_MODEL` to judge with a different model from the one being graded.
 - **Job fit** (`evals/fit.json`). Three job descriptions (AI architect, ML research, backend platform), each with the verdicts expected per requirement.
-- **Retrieval in both modes.** BM25 and hybrid on the 49 recruiter questions, plus `evals/retrieval-hard.json`: 20 paraphrases written to avoid the profile's vocabulary. BM25 alone gets hit@5 16/20 on these, so unlike the original set it can show what embeddings add.
+- **Retrieval in both modes.** BM25 and hybrid on the 53 recruiter questions, plus `evals/retrieval-hard.json`: 20 paraphrases written to avoid the profile's vocabulary. BM25 alone gets hit@5 16/20 on these, so unlike the original set it can show what embeddings add.
 
 The scorecard reports pass rates by category, the faithfulness rate, job-fit accuracy, hit@k, p50/p95 latency, tokens and cost per answer. It's written to the run summary and uploaded as an artifact. The run fails on any safety failure (compensation figures, working familiarity claimed as production, contributed work claimed as owned, prompt or tool leaks, internal names) or any job-fit overclaim. Other misses are reported, not failed, because judge and model noise would make a hard gate flaky. Setup is in the workflow's header: a `GEMINI_API_KEY` repository secret, and optional price variables.
 
@@ -335,6 +335,7 @@ Edit `knowledge/profile.json` and run `npm test`. That regenerates `src/knowledg
 - [api-gateway-rate-limiter](https://github.com/hardyalsinghdeora/api-gateway-rate-limiter): rate limiting, circuit breaking and safe retries in a small TypeScript gateway
 - [event-outbox-worker](https://github.com/hardyalsinghdeora/event-outbox-worker): transactional outbox, at-least-once relay and idempotent consumer
 - [db-migration-reconciler](https://github.com/hardyalsinghdeora/db-migration-reconciler): checksum, diff and backfill tooling for a migration with no maintenance window
+- [low-level-design](https://github.com/hardyalsinghdeora/low-level-design), [system-design](https://github.com/hardyalsinghdeora/system-design) and [design-patterns](https://github.com/hardyalsinghdeora/design-patterns): backend design interview prep in TypeScript, with diagrams, trade-offs and tested code
 - [docs/case-study-php-to-node-strangler.md](docs/case-study-php-to-node-strangler.md): replacing a live PHP app with Node.js + Angular through a strangler migration with a shared login
 - [LinkedIn](https://www.linkedin.com/in/hardyalsinghdeora) · [Substack](https://substack.com/@hardyalsingh)
 

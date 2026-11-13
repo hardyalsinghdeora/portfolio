@@ -5,7 +5,7 @@
 const PROFILE = {
   "meta": {
     "purpose": "Machine-readable career profile for recruiters and hiring managers",
-    "updated": "2026-11-05",
+    "updated": "2026-11-13",
     "human_versions": {
       "portfolio": "https://hardyal.is-a.dev/",
       "resume": "https://hardyalsinghdeora.github.io/case-studies/resume.html",
@@ -739,6 +739,24 @@ const PROFILE = {
         "zero-downtime",
         "python-cli"
       ]
+    },
+    {
+      "name": "Design interview prep repositories (TypeScript study set)",
+      "status": "Open source study and reference repositories, built as portfolio samples",
+      "url": "https://github.com/hardyalsinghdeora/low-level-design",
+      "links": {
+        "low_level_design": "https://github.com/hardyalsinghdeora/low-level-design",
+        "system_design": "https://github.com/hardyalsinghdeora/system-design",
+        "design_patterns": "https://github.com/hardyalsinghdeora/design-patterns"
+      },
+      "summary": "A public study set for the design rounds of backend interviews, written as interview practice rather than production work: three strict-TypeScript repositories with tests. The object-oriented repo has 40 machine-coding problems, from a parking lot to Splitwise, a stock brokerage, a double-entry wallet and subscription billing, each with clarifying questions, class and sequence diagrams, trade-offs and a tested solution (476 tests). The high-level repo has a 45-minute interview framework, 32 classic problems including a payment system, 30 concept notes and 16 runnable building blocks such as rate limiters, consistent hashing, an LSM-tree, HyperLogLog and fencing-token leases. The patterns repo covers the 23 Gang of Four patterns plus 14 modern backend ones (circuit breaker, outbox, saga, CQRS, event sourcing), with payments and orders as the examples.",
+      "topics": [
+        "low-level-design",
+        "system-design",
+        "design-patterns",
+        "interview-prep",
+        "typescript"
+      ]
     }
   ],
   "linkedin": {
@@ -991,7 +1009,9 @@ function buildChunks(p) {
   add("current-focus", "What I'm working on in 2026", "current_focus_2026", list(p.current_focus_2026));
   (p.projects || []).forEach((pr, i) => {
     add("project-" + i, `Project: ${pr.name}`, "projects",
-      `Status: ${pr.status || "n/a"}${pr.url ? "\nURL: " + pr.url : ""}\n${pr.summary}` +
+      `Status: ${pr.status || "n/a"}${pr.url ? "\nURL: " + pr.url : ""}` +
+      (pr.links ? "\nLinks:\n" + list(Object.values(pr.links).filter((u) => u !== pr.url)) : "") +
+      `\n${pr.summary}` +
       (pr.tools ? "\nTools:\n" + list(pr.tools) : "") +
       (pr.design_principles ? "\nDesign principles:\n" + list(pr.design_principles) : ""));
   });

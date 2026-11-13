@@ -1,5 +1,13 @@
 # For `npx wrangler pages deploy dist` and `npx wrangler pages dev dist`.
-# Secrets (GEMINI_API_KEY) are set in the Cloudflare dashboard or with `wrangler pages secret put`.
+# Because this file sets pages_build_output_dir, Cloudflare takes the project's bindings and
+# plain variables from here, not from the dashboard. Secrets still come from the dashboard
+# (or `wrangler pages secret put`): GEMINI_API_KEY, ANTHROPIC_API_KEY, LINKEDIN_CLIENT_ID,
+# LINKEDIN_CLIENT_SECRET, SESSION_SECRET, OWNER_EMAILS, FEEDBACK_ADMIN_TOKEN.
 name = "hardyalsinghdeora"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
+
+# Rate limits, Claude daily budget, sign-in sessions and access requests, feedback, visit counts.
+[[kv_namespaces]]
+binding = "RATE_KV"
+id = "fd0fee1089e04ec3bf65c79fc37d185d"

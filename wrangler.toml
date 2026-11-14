@@ -11,3 +11,10 @@ compatibility_date = "2026-10-01"
 [[kv_namespaces]]
 binding = "RATE_KV"
 id = "fd0fee1089e04ec3bf65c79fc37d185d"
+
+# Plain variables. Prices are USD per 1M tokens for gemini-3.5-flash-lite (paid Standard tier,
+# https://ai.google.dev/gemini-api/docs/pricing, read 2026-11-14). They only feed the cost shown in
+# the agent trace; update them when Google's prices or the model change.
+[vars]
+GEMINI_PRICE_INPUT = "0.30"
+GEMINI_PRICE_OUTPUT = "2.50"

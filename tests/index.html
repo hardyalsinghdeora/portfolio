@@ -31,7 +31,7 @@ import { buildChunks, buildIndex, bm25, search, rrf, tokenize } from "../src/rag
 import { runAgent, MAX_STEPS, SYSTEM } from "../src/agent.js";
 import { handle, validTurns, SEP, recordUsage, getIndex, rateLimitKey } from "../src/worker.js";
 import { assessFit, JD_MIN, JD_MAX, FIT_TIER_RULES } from "../src/fit.js";
-import { PHONE, REDLINES, COMPENSATION, guardText, LEAK_WORDS } from "../src/guard.js";
+import { PHONE, REDLINES, COMPENSATION, guardText, LEAK_WORDS, configureRedlines, redlinesConfigured } from "../src/guard.js";
 import { claudeAgent, toJsonSchema, runAgentWithFallback, CLAUDE_VERSION, CLAUDE_MAX_TOKENS, CLAUDE_JSON_MAX_TOKENS, CLAUDE_DAILY_LIMIT, claudeBudgetKey, takeClaudeBudget } from "../src/providers.js";
 import { feedbackToken, toEvalCandidates, FEEDBACK_TTL, MAX_COMMENT } from "../src/feedback.js";
 import { checkAnswer, runEvals, scorecardMarkdown, failed as runFailed } from "../evals/harness.mjs";
@@ -51,6 +51,14 @@ async function test(name, fn) {
 }
 function assert(c, msg) { if (!c) throw new Error(msg || "assertion failed"); }
 function eq(a, b, msg) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((msg || "not equal") + `: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
+
+// The real redline list is private (scripts/test.mjs injects it from REDLINE_PATTERN or the
+// gitignored .redline-pattern file). Tests that need a redlined name use the made-up names in
+// FAKE_REDLINES, so this file never has to mention a real one.
+const PRIVATE_REDLINES = window.__REDLINE_PATTERN__ || "";
+const FAKE_REDLINES = String.raw`\b(Zephyrline|Orbitdesk)\b`;
+const ALL_REDLINES = [PRIVATE_REDLINES, FAKE_REDLINES].filter(Boolean).join("|");
+configureRedlines(ALL_REDLINES);
 
 const chunks = buildChunks(PROFILE);
 const index = buildIndex(chunks);
@@ -108,6 +116,18 @@ await test("agentic AI section is indexed", () => {
 // PHONE and REDLINES live in src/guard.js, shared with the runtime guard and the answer evals.
 await test("no phone number anywhere in the public knowledge base", () => {
   assert(!PHONE.test(JSON.stringify(PROFILE)), "phone-like number found");
+});
+await test("the private redline list is loaded (set REDLINE_PATTERN or create .redline-pattern)", () => {
+  assert(PRIVATE_REDLINES, "no private redline pattern: the content checks below would pass without checking anything");
+});
+await test("guard: fails closed for public viewers when the private redline list is missing", () => {
+  configureRedlines("");
+  try {
+    eq(redlinesConfigured(), false);
+    eq(guardText("12+ domain services behind one gateway."), "redline_unconfigured");
+    eq(guardText("12+ domain services behind one gateway.", [], "recruiter"), null);
+  } finally { configureRedlines(ALL_REDLINES); }
+  eq(guardText("12+ domain services behind one gateway."), null);
 });
 await test("no redlined names or verbal-only numbers in the knowledge base, public pages or job-site text", async () => {
   const pages = await Promise.all(["../public/index.html", "../public/resume-agentic-ai.html"].map((u) => fetch(u).then((r) => r.text())));
@@ -276,7 +296,7 @@ await test("usage: tokens, latency and cost per answer, and every passage the mo
 });
 await test("guard: blocks leaks, and never blocks the profile's own text", () => {
   for (const [text, reason] of [
-    ["I led the Navigator rebuild.", "redline"], ["Call me on +91 9876543210.", "phone"],
+    ["I led the Zephyrline rebuild.", "redline"], ["Call me on +91 9876543210.", "phone"],
     ["I'm expecting 40 LPA.", "compensation"], ["Around 35 lakhs.", "compensation"], ["Roughly ₹45,00,000.", "redline"],
     ["About $120k.", "compensation"], ["$150,000 base.", "compensation"], ["INR 4500000", "compensation"],
   ]) eq(guardText(text, [SYSTEM]), reason, text);
@@ -295,22 +315,22 @@ await test("guard: /api/ask and /api/fit replace guarded text and never return i
     const [body, meta] = (await res.text()).split(SEP);
     return { body, meta: JSON.parse(meta) };
   };
-  const leaked = await ask("I built the Navigator platform.");
-  assert(!leaked.body.includes("Navigator") && /hardyalsinghdeora@gmail\.com/.test(leaked.body), leaked.body);
+  const leaked = await ask("I built the Zephyrline platform.");
+  assert(!leaked.body.includes("Zephyrline") && /hardyalsinghdeora@gmail\.com/.test(leaked.body), leaked.body);
   eq(leaked.meta.guarded, true); eq(leaked.meta.sources.length, 0);
   eq((await ask("Here you go: " + SYSTEM.split("\n")[0])).meta.guarded, true, "prompt leak");
   const fine = await ask("I build bounded agents.");
   eq(fine.body, "I build bounded agents."); assert(!("guarded" in fine.meta));
   const fitReq = req("/api/fit", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jd: "Must have Zoho CRM experience and production LLM agents. ".repeat(3) }) });
+    body: JSON.stringify({ jd: "Must have Orbitdesk CRM experience and production LLM agents. ".repeat(3) }) });
   const res = await handle(fitReq, E, mockFit(
-    [{ requirement: "Zoho CRM experience", kind: "must" }, { requirement: "Production LLM agents", kind: "must" }],
+    [{ requirement: "Orbitdesk CRM experience", kind: "must" }, { requirement: "Production LLM agents", kind: "must" }],
     (c) => ({ summary: "Call me on 9876543210.", results: [
-      { index: 0, match: "gap", evidence: "I haven't used Zoho.", source_ids: [] },
+      { index: 0, match: "gap", evidence: "I haven't used Orbitdesk.", source_ids: [] },
       { index: 1, match: "strong", evidence: "I run agents in production.", source_ids: [c[1][0]] }] })));
   const d = await res.json();
-  eq(d.guarded, true); assert(!/9876543210/.test(d.summary) && !/Zoho/.test(d.requirements[0].evidence));
-  eq(d.requirements[0].requirement, "Zoho CRM experience", "the visitor's own requirement text is echoed as is");
+  eq(d.guarded, true); assert(!/9876543210/.test(d.summary) && !/Orbitdesk/.test(d.requirements[0].evidence));
+  eq(d.requirements[0].requirement, "Orbitdesk CRM experience", "the visitor's own requirement text is echoed as is");
   eq(d.requirements[1].evidence, "I run agents in production.");
 });
 // Mock of the Claude Messages API: replies are content-block arrays (or a function of the request).
@@ -672,7 +692,7 @@ await test("evals: deterministic answer checks", () => {
   assert(checkAnswer(c, "My notice period is 60 days.", ["availability"])[0].startsWith("none of"));
   assert(checkAnswer(c, "30 days notice, 40 INR", ["availability"]).some((f) => f.startsWith("must not")));
   assert(checkAnswer(c, "My notice period is 30 days.", ["contact"]).some((f) => f.startsWith("no passage")));
-  assert(checkAnswer({}, "I worked on Navigator.", []).some((f) => f.startsWith("redline")), "redlines apply to every answer");
+  assert(checkAnswer({}, "I worked on Orbitdesk.", []).some((f) => f.startsWith("redline")), "redlines apply to every answer");
   assert(checkAnswer({}, "Call me on 9876543210.", []).includes("phone-like number"));
 });
 await test("evals: a full run catches a leaked salary, an unfaithful answer and a job-fit overclaim", async () => {
@@ -819,9 +839,9 @@ await test("worker: a blocked injection gets the fixed reply and costs no model 
   eq(res.status, 200); eq(text, INJECTION_REPLY); eq(JSON.parse(meta).blocked, true); eq(calls.length, 0);
 });
 await test("output guard: what each tier may see", () => {
-  eq(guardText("I built the Mindspark offline servers."), "redline");
-  eq(guardText("I built the Mindspark offline servers.", [], "member"), "redline");
-  eq(guardText("I built the Mindspark offline servers.", [], "recruiter"), null);
+  eq(guardText("I built the Zephyrline offline servers."), "redline");
+  eq(guardText("I built the Zephyrline offline servers.", [], "member"), "redline");
+  eq(guardText("I built the Zephyrline offline servers.", [], "recruiter"), null);
   eq(guardText("My expectation is 30 LPA.", [], "recruiter"), "compensation");
   eq(guardText("My expectation is 30 LPA.", [], "owner"), null);
   eq(guardText("Call 9876543210.", [], "owner"), "phone");
@@ -967,7 +987,7 @@ await test("semantic cache: exact and semantic hits skip the model; similar word
   eq((await cacheLookup({ env: loose, tier: "public", version: "v", question: "Do you know Kubernetes?", fetchImpl: async () => Response.json({ embeddings: [{ values: [1, 0] }] }) })).hit, null);
   // Tiers never share a namespace, and the owner is never cached.
   assert(cacheKey("public", "v") !== cacheKey("recruiter", "v"));
-  await cacheStore({ env: E, tier: "recruiter", version: "v", question: "Offline story?", text: "Mindspark detail", meta: {} });
+  await cacheStore({ env: E, tier: "recruiter", version: "v", question: "Offline story?", text: "Zephyrline detail", meta: {} });
   eq((await cacheLookup({ env: E, tier: "public", version: "v", question: "Offline story?" })).hit, null, "recruiter answer not served to public");
   eq(await cacheStore({ env: E, tier: "owner", version: "v", question: "q", text: "t", meta: {} }), false);
   // One extra term halves the overlap, and a question with no key terms never matches semantically.

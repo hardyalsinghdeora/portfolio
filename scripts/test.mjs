@@ -6,8 +6,12 @@ import { readFile } from "node:fs/promises";
 import { join, extname, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
+import { loadRedlinePattern } from "./redline-pattern.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+// The test page checks content against the private redline list, which is never committed.
+const redlinePattern = loadRedlinePattern(root);
+if (!redlinePattern) console.error("REDLINE_PATTERN is not set and there is no .redline-pattern file: redline tests will fail");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json" };
 
 const server = createServer(async (req, res) => {
@@ -29,6 +33,7 @@ try {
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript((p) => { window.__REDLINE_PATTERN__ = p; }, redlinePattern);
   await page.goto(base + "/tests/");
   await page.waitForFunction(() => window.__TESTS__, null, { timeout: 30000 }).catch(() => {});
   const r = await page.evaluate(() => window.__TESTS__);

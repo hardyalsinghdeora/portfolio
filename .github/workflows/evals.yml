@@ -6,6 +6,7 @@
 #
 # One-time setup (repo > Settings > Secrets and variables > Actions):
 #   GEMINI_API_KEY        secret; can be the same key the Pages project uses
+#   REDLINE_PATTERN       secret; the private redline regex (see src/guard.js), same as deploy.yml
 #   GEMINI_PRICE_INPUT    optional variable, USD per 1M input tokens, to report cost
 #   GEMINI_PRICE_OUTPUT   optional variable, USD per 1M output tokens
 #   EVAL_JUDGE_MODEL      optional variable, a different model to judge faithfulness
@@ -51,6 +52,7 @@ jobs:
       - name: Run evals
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REDLINE_PATTERN: ${{ secrets.REDLINE_PATTERN }}
           GEMINI_PRICE_INPUT: ${{ vars.GEMINI_PRICE_INPUT }}
           GEMINI_PRICE_OUTPUT: ${{ vars.GEMINI_PRICE_OUTPUT }}
           EVAL_JUDGE_MODEL: ${{ vars.EVAL_JUDGE_MODEL }}

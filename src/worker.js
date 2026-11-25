@@ -29,7 +29,7 @@ import { PROFILE } from "./knowledge.js";
 import { buildChunks, buildIndex, search } from "./rag.js";
 import { systemFor } from "./agent.js";
 import { runAgentWithFallback } from "./providers.js";
-import { guardText, GUARDED_ANSWER, GUARDED_EVIDENCE } from "./guard.js";
+import { guardText, configureRedlines, GUARDED_ANSWER, GUARDED_EVIDENCE } from "./guard.js";
 import { screenTurns, INJECTION_REPLY } from "./inject.js";
 import { routeQuestion, modelsFor } from "./router.js";
 import { cacheLookup, cacheStore, cacheEnabled } from "./cache.js";
@@ -68,6 +68,9 @@ export const SHORT_LINKS = {
 // ctx (the Worker's ExecutionContext) lets cache writes finish after the response is sent; without
 // it (tests, the eval harness) they are awaited instead.
 export async function handle(request, env, fetchImpl, ctx) {
+  // The private redline list is a secret (see src/guard.js). Compiled once per isolate; without
+  // it the output guard fails closed. Envs without it (tests) keep whatever was configured.
+  if (env && env.REDLINE_PATTERN) configureRedlines(env.REDLINE_PATTERN);
   const url = new URL(request.url);
   const target = SHORT_LINKS[url.pathname.replace(/\/+$/, "")];
   if (target) return Response.redirect(target, 302);

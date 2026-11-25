@@ -1643,9 +1643,23 @@ async function runAgentWithFallback(opts) {
 
 // Any Indian mobile number (optionally +91-prefixed).
 const PHONE = /(?:\+91[-\s]?)?\b[6-9]\d{9}\b/;
-// Employer-internal vocabulary and company numbers that may be said in an interview but never
-// published (career-profile redlines.json and the verbal-only rows of the master résumé).
-const REDLINES = /\b(Mindspark|Naandi|Shiksha|SchoolSite|School Site|Navigator|da_orderMaster|common_user_details|educatio_educat|ei-order|navigator-aggregator|ei-navigator-ui|ei-mcp-gateway|Zoho)\b|\b(ASSET|CARES|SZM|NSH)\b|\bNAV-\d|500k|500,000|577|1,689,499|363,609|₹\s?\d|\bcr(ore)?\b/;
+// Redlines: text that may be said in an interview but never published. Only the generic part
+// (rupee amounts, crore figures) lives here. The employer-internal names and company numbers
+// (career-profile redlines.json and the verbal-only rows of the master résumé) are themselves
+// private, so they come from the REDLINE_PATTERN secret, a regex alternation, and are never
+// committed: the Worker reads it from env, CI from the repository secret, and local runs from the
+// gitignored .redline-pattern file (scripts/redline-pattern.mjs).
+const PUBLIC_REDLINES = String.raw`₹\s?\d|\bcr(ore)?\b`;
+// Live binding: importers see the pattern configureRedlines() last compiled.
+let REDLINES = new RegExp(PUBLIC_REDLINES);
+let redlineSource = null;
+function configureRedlines(pattern) {
+  pattern = String(pattern || "").trim();
+  if (pattern === redlineSource) return;
+  REDLINES = new RegExp(pattern ? `(?:${pattern})|${PUBLIC_REDLINES}` : PUBLIC_REDLINES);
+  redlineSource = pattern;
+}
+const redlinesConfigured = () => Boolean(redlineSource);
 // Compensation amounts: lakhs/LPA/crores, rupee or INR amounts, and salary-shaped dollar figures
 // ($120k, $1,20,000, $150,000). Small dollar amounts such as an answer's cost ($0.0004) pass.
 const COMPENSATION = /\b\d+(?:\.\d+)?\s?(?:LPA|[Ll]akhs?|[Ll]acs?|[Cc]rores?)\b|₹\s?\d|\bINR\s?\d|\$\s?\d{1,3}(?:,\d{2,3})+\b|\$\s?\d+(?:\.\d+)?\s?[kKmM]\b/;
@@ -1664,14 +1678,16 @@ function shingles(prompt) {
   return shingleCache.get(prompt);
 }
 
-// Returns the reason text must not be shown ("redline", "phone", "compensation", "prompt_leak"),
-// or null when it's fine. prompts: system prompts whose wording must not be echoed back.
+// Returns the reason text must not be shown ("redline", "redline_unconfigured", "phone",
+// "compensation", "prompt_leak"), or null when it's fine. Without the private pattern the guard
+// can't tell what is internal, so it fails closed for everyone who isn't an insider. prompts: system prompts whose wording must not be echoed back.
 // tier (src/tiers.js) relaxes what the signed-in viewer may see: an approved recruiter may read
 // internal names and company numbers but never compensation; the owner may read both. Phone
 // numbers and prompt leaks are blocked for everyone.
 function guardText(text, prompts = [], tier = "public") {
   const s = String(text || "");
   const insider = tier === "recruiter" || tier === "owner";
+  if (!insider && !redlinesConfigured()) return "redline_unconfigured";
   if (!insider && REDLINES.test(s)) return "redline";
   if (PHONE.test(s)) return "phone";
   if (tier !== "owner" && COMPENSATION.test(s)) return "compensation";
@@ -2718,6 +2734,9 @@ const SHORT_LINKS = {
 // ctx (the Worker's ExecutionContext) lets cache writes finish after the response is sent; without
 // it (tests, the eval harness) they are awaited instead.
 async function handle(request, env, fetchImpl, ctx) {
+  // The private redline list is a secret (see src/guard.js). Compiled once per isolate; without
+  // it the output guard fails closed. Envs without it (tests) keep whatever was configured.
+  if (env && env.REDLINE_PATTERN) configureRedlines(env.REDLINE_PATTERN);
   const url = new URL(request.url);
   const target = SHORT_LINKS[url.pathname.replace(/\/+$/, "")];
   if (target) return Response.redirect(target, 302);

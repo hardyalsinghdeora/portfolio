@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 import { runEvals, scorecardMarkdown, failed } from "../evals/harness.mjs";
 import { DEFAULT_MODEL } from "../src/agent.js";
 import { CLAUDE_DEFAULT_MODEL } from "../src/providers.js";
+import { configureRedlines } from "../src/guard.js";
+import { loadRedlinePattern } from "./redline-pattern.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const json = (p) => JSON.parse(readFileSync(join(root, p), "utf8"));
@@ -23,6 +25,13 @@ if (!process.env.GEMINI_API_KEY) {
   console.error("GEMINI_API_KEY is not set");
   process.exit(2);
 }
+// Without the private list, the internal-name checks would pass without checking anything.
+const redlinePattern = loadRedlinePattern(root);
+if (!redlinePattern) {
+  console.error("REDLINE_PATTERN is not set and there is no .redline-pattern file");
+  process.exit(2);
+}
+configureRedlines(redlinePattern);
 const i = process.argv.indexOf("--only");
 const only = i > 0 ? new RegExp(process.argv[i + 1], "i") : null;
 const env = Object.fromEntries(["GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_EMBED_MODEL", "EVAL_JUDGE_MODEL",

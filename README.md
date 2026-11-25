@@ -192,6 +192,13 @@ The prompt tells the model what it must never say. `src/guard.js` checks that it
 - compensation figures (lakhs/LPA/crores, rupee or INR amounts, salary-shaped dollar figures);
 - any run of 12 consecutive words copied from the system prompt.
 
+The list of internal names is itself confidential, so it isn't in this repository. Only the generic patterns (rupee amounts, crore figures) are in `src/guard.js`. The rest is a regex in the `REDLINE_PATTERN` secret:
+- **Production:** the Worker reads it from its env. `deploy.yml` copies the repository secret to the Pages project before each deploy.
+- **CI tests and evals:** read the same repository secret.
+- **Local runs:** read a gitignored `.redline-pattern` file, or `REDLINE_PATTERN` in `.dev.vars` for `wrangler pages dev`.
+
+Without the pattern, the guard fails closed and withholds every public answer rather than guessing. The tests refuse to pass without it, and they use made-up names, so no real one appears in the code.
+
 A blocked `/api/ask` answer is replaced with a pointer to email, and its sources are dropped. In `/api/fit`, a blocked summary or evidence line is replaced and its verdict kept. Requirement text is the visitor's own job description, so it isn't checked. Each block writes a log line and an Analytics Engine field with the reason only, never the text.
 
 A test runs every profile passage through the guard, so text the agent quotes can't be blocked by mistake. The build-time content tests use the same patterns. The live evals grade the model's raw output and report how often the guard would have stepped in, so it never hides a misbehaving prompt.

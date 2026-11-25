@@ -2,7 +2,8 @@
 # Because this file sets pages_build_output_dir, Cloudflare takes the project's bindings and
 # plain variables from here, not from the dashboard. Secrets still come from the dashboard
 # (or `wrangler pages secret put`): GEMINI_API_KEY, ANTHROPIC_API_KEY, LINKEDIN_CLIENT_ID,
-# LINKEDIN_CLIENT_SECRET, SESSION_SECRET, OWNER_EMAILS, FEEDBACK_ADMIN_TOKEN.
+# LINKEDIN_CLIENT_SECRET, SESSION_SECRET, OWNER_EMAILS, FEEDBACK_ADMIN_TOKEN, REDLINE_PATTERN
+# (REDLINE_PATTERN is synced from the GitHub secret by deploy.yml).
 name = "hardyalsinghdeora"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
